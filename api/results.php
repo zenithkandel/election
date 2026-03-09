@@ -21,8 +21,8 @@ $sources = [
         "seatCount" => 165,
     ],
     "map" => [
-        "sourcePageUrl" => "https://result.election.gov.np/MapElectionResult2082.aspx",
-        "referer" => "https://result.election.gov.np/MapElectionResult2082.aspx",
+        "sourcePageUrl" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
+        "referer" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
     ],
 ];
 
