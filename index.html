@@ -524,7 +524,9 @@
             first-past-the-post seat results to show a practical federal
             parliament projection. PR seats are estimated from current vote
             share. FPTP totals use won and leading seats reported by the
-            upstream election feed.
+            upstream election feed. The main focus is whether any party is
+            approaching the two-thirds supermajority needed to amend the
+            constitution on its own.
           </p>
           <div class="hero-meta" id="heroMeta"></div>
         </div>
@@ -655,7 +657,7 @@
         lastUpdated: null,
       };
 
-      const MAJORITY_MARK = 138;
+      const SIMPLE_MAJORITY_MARK = 138;
       const resultsBody = document.getElementById("resultsBody");
       const summaryGrid = document.getElementById("summaryGrid");
       const conclusionBody = document.getElementById("conclusionBody");
@@ -695,6 +697,14 @@
         }
 
         return `https://result.election.gov.np/Images/symbol-hor-pa/${symbolId}.jpg?v=0.2`;
+      }
+
+      function getTwoThirdsMark() {
+        if (!state.meta) {
+          return 0;
+        }
+
+        return Math.ceil((state.meta.totalSeats * 2) / 3);
       }
 
       function mergeDatasets(payload) {
@@ -803,6 +813,7 @@
           `PR seats: ${formatNumber(meta.prSeats)}`,
           `FPTP seats: ${formatNumber(meta.fptpSeats)}`,
           `House total: ${formatNumber(meta.totalSeats)}`,
+          `2/3 mark: ${formatNumber(Math.ceil((meta.totalSeats * 2) / 3))}`,
           `Updated: ${formatTime(state.lastUpdated)}`,
         ].forEach((text) => {
           const chip = document.createElement("div");
@@ -821,6 +832,10 @@
         const withProjection = state.data.filter(
           (party) => party.projectedFederalSeats > 0,
         ).length;
+        const supermajorityMark = getTwoThirdsMark();
+        const seatsToSupermajority = leader
+          ? Math.max(supermajorityMark - leader.projectedFederalSeats, 0)
+          : 0;
 
         const cards = [
           {
@@ -831,19 +846,21 @@
               : "No data available",
           },
           {
-            label: "Majority threshold",
-            value: formatNumber(MAJORITY_MARK),
-            note: `${formatNumber(state.meta.totalSeats)} total seats in the House of Representatives`,
+            label: "Two-thirds threshold",
+            value: formatNumber(supermajorityMark),
+            note: "Seats required for a single-party constitutional-amendment supermajority",
+          },
+          {
+            label: "Gap to two-thirds",
+            value: formatNumber(seatsToSupermajority),
+            note: leader
+              ? `${leader.partyName} still needs this many seats to reach constitutional-amendment territory`
+              : "No data available",
           },
           {
             label: "Parties in projection",
             value: formatNumber(withProjection),
-            note: "Parties currently projected to hold at least one federal seat",
-          },
-          {
-            label: "Displayed rows",
-            value: formatNumber(filteredData.length),
-            note: `Filtered from ${formatNumber(state.data.length)} total parties in the combined feed`,
+            note: `Showing ${formatNumber(filteredData.length)} filtered rows from ${formatNumber(state.data.length)} total parties`,
           },
         ];
 
@@ -869,25 +886,35 @@
           return;
         }
 
+        const supermajorityMark = getTwoThirdsMark();
+        const seatsToSupermajority = Math.max(
+          supermajorityMark - leader.projectedFederalSeats,
+          0,
+        );
         const seatsToMajority = Math.max(
-          MAJORITY_MARK - leader.projectedFederalSeats,
+          SIMPLE_MAJORITY_MARK - leader.projectedFederalSeats,
           0,
         );
         const federalShare = state.meta
           ? leader.projectedFederalSeats / state.meta.totalSeats
           : 0;
+        const supermajorityStatus =
+          leader.projectedFederalSeats >= supermajorityMark
+            ? `${leader.partyName} is already above the two-thirds line, which would amount to single-party constitutional-amendment strength.`
+            : `${leader.partyName} remains ${formatNumber(seatsToSupermajority)} seats short of the two-thirds line, so it is not yet in single-party constitutional-amendment territory.`;
 
         conclusionBody.innerHTML = `
           <article class="conclusion-lead">
-            <p class="conclusion-kicker">Current projection leader</p>
+            <p class="conclusion-kicker">Two-thirds watch</p>
             <h3 class="conclusion-title">${leader.partyName}</h3>
             <p class="conclusion-text">
-              ${leader.partyName} is currently projected to reach ${formatNumber(leader.projectedFederalSeats)} seats in the federal parliament, combining ${formatNumber(leader.prEstimatedSeats)} estimated PR seats with ${formatNumber(leader.fptpWon)} won and ${formatNumber(leader.fptpLeading)} leading FPTP seats.
+              ${leader.partyName} is currently projected to reach ${formatNumber(leader.projectedFederalSeats)} seats in the federal parliament, combining ${formatNumber(leader.prEstimatedSeats)} estimated PR seats with ${formatNumber(leader.fptpWon)} won and ${formatNumber(leader.fptpLeading)} leading FPTP seats. ${supermajorityStatus}
             </p>
           </article>
           <ul class="conclusion-list">
             <li>Projected share of the House: ${formatPercent(federalShare)}</li>
-            <li>Seats still short of a standalone majority: ${formatNumber(seatsToMajority)}</li>
+            <li>Seats still short of a simple majority: ${formatNumber(seatsToMajority)}</li>
+            <li>Seats still short of a two-thirds supermajority: ${formatNumber(seatsToSupermajority)}</li>
             <li>Current secured floor using PR estimate plus FPTP wins: ${formatNumber(leader.securedFederalSeats)}</li>
           </ul>
         `;
