@@ -433,7 +433,9 @@
         pointer-events: none;
         opacity: 0;
         transform: translateY(4px);
-        transition: opacity 120ms ease, transform 120ms ease;
+        transition:
+          opacity 120ms ease,
+          transform 120ms ease;
       }
 
       .map-tooltip.is-visible {
@@ -664,7 +666,8 @@
             </div>
           </header>
           <p class="visual-caption">
-            A semicircle projection of all 275 House seats using the current combined PR estimate and FPTP won-plus-leading totals.
+            A semicircle projection of all 275 House seats using the current
+            combined PR estimate and FPTP won-plus-leading totals.
           </p>
           <div class="seat-map-shell">
             <div id="seatMap" class="status">Loading seat map.</div>
@@ -679,7 +682,9 @@
             </div>
           </header>
           <p class="visual-caption">
-            Federal constituencies are colored by the currently leading or elected party, using the same palette as the seat map and party table.
+            Federal constituencies are colored by the currently leading or
+            elected party, using the same palette as the seat map and party
+            table.
           </p>
           <div class="heat-map-shell">
             <div id="heatMap" class="status">Loading constituency map.</div>
@@ -883,7 +888,8 @@
 
       function getPartyColorMap() {
         const rankedParties = [...state.data].sort(
-          (left, right) => right.projectedFederalSeats - left.projectedFederalSeats,
+          (left, right) =>
+            right.projectedFederalSeats - left.projectedFederalSeats,
         );
         const colorMap = new Map();
 
@@ -938,7 +944,10 @@
             6,
             Math.round((radius / weightSum) * totalSeats),
           );
-          const count = row === rowCount - 1 ? remainingSeats : Math.min(estimated, remainingSeats - (remainingRows - 1) * 6);
+          const count =
+            row === rowCount - 1
+              ? remainingSeats
+              : Math.min(estimated, remainingSeats - (remainingRows - 1) * 6);
           counts.push(count);
           assigned += count;
         });
@@ -961,23 +970,33 @@
 
       function renderSeatMap(filteredData) {
         if (!state.meta || !state.data.length) {
-          seatMap.innerHTML = '<div class="status">Waiting for seat data.</div>';
+          seatMap.innerHTML =
+            '<div class="status">Waiting for seat data.</div>';
           seatLegend.innerHTML = "";
           return;
         }
 
         const colorMap = getPartyColorMap();
-        const visibleParties = new Set(filteredData.map((party) => party.partyName));
+        const visibleParties = new Set(
+          filteredData.map((party) => party.partyName),
+        );
         const seats = [];
 
         [...state.data]
-          .sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats)
+          .sort(
+            (left, right) =>
+              right.projectedFederalSeats - left.projectedFederalSeats,
+          )
           .forEach((party) => {
             for (let seat = 0; seat < party.projectedFederalSeats; seat += 1) {
               seats.push({
                 partyName: party.partyName,
-                color: colorMap.get(party.partyName) || getFallbackColor(party.partyName),
-                visible: visibleParties.size === state.data.length || visibleParties.has(party.partyName),
+                color:
+                  colorMap.get(party.partyName) ||
+                  getFallbackColor(party.partyName),
+                visible:
+                  visibleParties.size === state.data.length ||
+                  visibleParties.has(party.partyName),
               });
             }
           });
@@ -1002,7 +1021,10 @@
             return;
           }
 
-          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          const circle = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "circle",
+          );
           circle.setAttribute("cx", position.x.toFixed(2));
           circle.setAttribute("cy", position.y.toFixed(2));
           circle.setAttribute("r", "6.2");
@@ -1014,7 +1036,10 @@
         renderLegend(
           seatLegend,
           [...state.data]
-            .sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats)
+            .sort(
+              (left, right) =>
+                right.projectedFederalSeats - left.projectedFederalSeats,
+            )
             .slice(0, 8),
           colorMap,
           "projectedFederalSeats",
@@ -1023,26 +1048,35 @@
 
       function renderHeatMap(filteredData) {
         if (!state.mapData) {
-          heatMap.innerHTML = '<div class="status">Loading constituency map.</div>';
+          heatMap.innerHTML =
+            '<div class="status">Loading constituency map.</div>';
           mapLegend.innerHTML = "";
           return;
         }
 
         if (!window.d3) {
-          heatMap.innerHTML = '<div class="status error">D3 failed to load, so the constituency map could not be rendered.</div>';
+          heatMap.innerHTML =
+            '<div class="status error">D3 failed to load, so the constituency map could not be rendered.</div>';
           return;
         }
 
         const geojson = state.mapData.geojson;
 
-        if (!geojson || !Array.isArray(geojson.features) || !geojson.features.length) {
-          heatMap.innerHTML = '<div class="status">No constituency geometry is available.</div>';
+        if (
+          !geojson ||
+          !Array.isArray(geojson.features) ||
+          !geojson.features.length
+        ) {
+          heatMap.innerHTML =
+            '<div class="status">No constituency geometry is available.</div>';
           mapLegend.innerHTML = "";
           return;
         }
 
         const colorMap = getPartyColorMap();
-        const visibleParties = new Set(filteredData.map((party) => party.partyName));
+        const visibleParties = new Set(
+          filteredData.map((party) => party.partyName),
+        );
         const width = Math.max(320, heatMap.clientWidth || 620);
         const height = Math.max(420, Math.round(width * 0.62));
         const projection = d3.geoMercator().fitSize([width, height], geojson);
@@ -1091,7 +1125,8 @@
           .attr("stroke", "#fff")
           .attr("stroke-width", 1.15)
           .on("mousemove", (event, feature) => {
-            const partyName = feature.properties.winnerPartyName || "No winner data";
+            const partyName =
+              feature.properties.winnerPartyName || "No winner data";
             const constituencyLabel = `${feature.properties.districtName || `District ${feature.properties.districtId}`}, constituency ${feature.properties.constituencyId}`;
             mapTooltip.innerHTML = `
               <strong>${constituencyLabel}</strong>
@@ -1478,7 +1513,8 @@
       }
 
       async function loadMapData() {
-        heatMap.innerHTML = '<div class="status">Loading constituency map.</div>';
+        heatMap.innerHTML =
+          '<div class="status">Loading constituency map.</div>';
 
         try {
           const response = await fetch("api/results.php?view=map", {
@@ -1487,7 +1523,9 @@
           const payload = await response.json();
 
           if (!response.ok || payload.error) {
-            throw new Error(payload.error || "Unable to load constituency map data.");
+            throw new Error(
+              payload.error || "Unable to load constituency map data.",
+            );
           }
 
           state.mapData = payload;
