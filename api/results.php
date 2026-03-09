@@ -10,15 +10,19 @@ $shouldVerifyTls = $caBundle !== false && $caBundle !== "";
 $sources = [
     "pr" => [
         "sourcePageUrl" => "https://result.election.gov.np/PRVoteChartResult2082.aspx",
-        "dataUrl" => "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/PRHoRPartyTop5.txt",
         "referer" => "https://result.election.gov.np/PRVoteChartResult2082.aspx",
+        "dataFile" => "JSONFiles/Election2082/Common/PRHoRPartyTop5.txt",
         "seatCount" => 110,
     ],
     "fptp" => [
         "sourcePageUrl" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
-        "dataUrl" => "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/HoRPartyTop5.txt",
         "referer" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
+        "dataFile" => "JSONFiles/Election2082/Common/HoRPartyTop5.txt",
         "seatCount" => 165,
+    ],
+    "map" => [
+        "sourcePageUrl" => "https://result.election.gov.np/MapElectionResult2082.aspx",
+        "referer" => "https://result.election.gov.np/MapElectionResult2082.aspx",
     ],
 ];
 
@@ -33,6 +37,44 @@ function respondWithError(int $statusCode, string $message, ?array $details = nu
     }
 
     echo json_encode($payload);
+}
+
+function respondWithJson(array $payload): void
+{
+    echo json_encode($payload);
+}
+
+function getCachePath(string $key): string
+{
+    return sys_get_temp_dir() . DIRECTORY_SEPARATOR . "election_cache_" . md5($key) . ".json";
+}
+
+function readCache(string $key, int $ttlSeconds): ?array
+{
+    $cachePath = getCachePath($key);
+
+    if (!is_file($cachePath)) {
+        return null;
+    }
+
+    if ((time() - filemtime($cachePath)) > $ttlSeconds) {
+        return null;
+    }
+
+    $content = file_get_contents($cachePath);
+
+    if ($content === false) {
+        return null;
+    }
+
+    $decoded = json_decode($content, true);
+
+    return is_array($decoded) ? $decoded : null;
+}
+
+function writeCache(string $key, array $payload): void
+{
+    @file_put_contents(getCachePath($key), json_encode($payload));
 }
 
 function createCurlHandle(string $url, string $cookieFile, string $userAgent, bool $shouldVerifyTls, string $caBundle = "")
@@ -95,13 +137,13 @@ function parseCookiesFromHeaders(string $rawHeaders): array
     $headerLines = preg_split('/\r\n|\r|\n/', $rawHeaders) ?: [];
 
     foreach ($headerLines as $line) {
-        if (stripos($line, 'Set-Cookie:') !== 0) {
+        if (stripos($line, "Set-Cookie:") !== 0) {
             continue;
         }
 
-        $cookiePair = trim(substr($line, strlen('Set-Cookie:')));
-        $segments = explode(';', $cookiePair);
-        $nameValue = explode('=', trim($segments[0]), 2);
+        $cookiePair = trim(substr($line, strlen("Set-Cookie:")));
+        $segments = explode(";", $cookiePair);
+        $nameValue = explode("=", trim($segments[0]), 2);
 
         if (count($nameValue) === 2) {
             $cookies[$nameValue[0]] = $nameValue[1];
@@ -111,53 +153,7 @@ function parseCookiesFromHeaders(string $rawHeaders): array
     return $cookies;
 }
 
-function normalizePrRows(array $rows, int $seatCount): array
-{
-    $totalVotes = array_reduce($rows, static function (int $sum, array $row): int {
-        return $sum + (int) ($row["TotalVoteReceived"] ?? 0);
-    }, 0);
-
-    $normalized = [];
-
-    foreach ($rows as $row) {
-        $votes = (int) ($row["TotalVoteReceived"] ?? 0);
-        $voteShare = $totalVotes > 0 ? $votes / $totalVotes : 0;
-
-        $normalized[] = [
-            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
-            "symbolId" => (int) ($row["SymbolID"] ?? 0),
-            "prVotes" => $votes,
-            "prVoteShare" => $voteShare,
-            "prEstimatedSeats" => (int) round($voteShare * $seatCount),
-        ];
-    }
-
-    return $normalized;
-}
-
-function normalizeFptpRows(array $rows): array
-{
-    $normalized = [];
-
-    foreach ($rows as $row) {
-        $won = (int) ($row["TotWin"] ?? 0);
-        $leading = (int) ($row["TotLead"] ?? 0);
-        $candidates = (int) ($row["t_cand"] ?? 0);
-
-        $normalized[] = [
-            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
-            "symbolId" => (int) ($row["SymbolID"] ?? 0),
-            "fptpWon" => $won,
-            "fptpLeading" => $leading,
-            "fptpProjectedSeats" => $won + $leading,
-            "candidateCount" => $candidates,
-        ];
-    }
-
-    return $normalized;
-}
-
-function fetchElectionDataset(array $config, string $userAgent, bool $shouldVerifyTls, string $caBundle): array
+function withSecureSession(array $config, string $userAgent, bool $shouldVerifyTls, string $caBundle, callable $callback)
 {
     $cookieFile = tempnam(sys_get_temp_dir(), "election_cookie_");
 
@@ -207,54 +203,228 @@ function fetchElectionDataset(array $config, string $userAgent, bool $shouldVeri
             throw new RuntimeException("Unable to obtain the upstream session cookies.");
         }
 
-        $cookieHeader = sprintf("ASP.NET_SessionId=%s; CsrfToken=%s", $sessionId, $csrfToken);
+        $session = [
+            "cookieFile" => $cookieFile,
+            "cookieHeader" => sprintf("ASP.NET_SessionId=%s; CsrfToken=%s", $sessionId, $csrfToken),
+            "csrfToken" => $csrfToken,
+            "referer" => $config["referer"] ?? $config["sourcePageUrl"],
+            "userAgent" => $userAgent,
+            "shouldVerifyTls" => $shouldVerifyTls,
+            "caBundle" => $caBundle,
+        ];
 
-        $dataRequest = createCurlHandle($config["dataUrl"], $cookieFile, $userAgent, $shouldVerifyTls, $caBundle);
-        curl_setopt_array($dataRequest, [
-            CURLOPT_HTTPHEADER => [
-                "Accept: application/json, text/javascript, */*; q=0.01",
-                "Accept-Language: en-US,en;q=0.6",
-                "Cache-Control: no-cache",
-                "Pragma: no-cache",
-                "Cookie: {$cookieHeader}",
-                "Referer: {$config['referer']}",
-                "X-CSRF-Token: {$csrfToken}",
-                "X-Requested-With: XMLHttpRequest",
-            ],
-        ]);
-
-        $response = curl_exec($dataRequest);
-        $responseStatus = (int) curl_getinfo($dataRequest, CURLINFO_RESPONSE_CODE);
-
-        if ($response === false) {
-            $error = curl_error($dataRequest);
-            curl_close($dataRequest);
-            throw new RuntimeException("Unable to fetch the upstream results.", 0, new RuntimeException($error));
-        }
-
-        curl_close($dataRequest);
-
-        if ($responseStatus < 200 || $responseStatus >= 300) {
-            throw new RuntimeException("The upstream results endpoint rejected the request.");
-        }
-
-        $decoded = json_decode($response, true);
-
-        if (!is_array($decoded)) {
-            throw new RuntimeException("The upstream service returned a non-JSON response.");
-        }
-
-        return $decoded;
+        return $callback($session);
     } finally {
         @unlink($cookieFile);
     }
 }
 
-try {
-    $prRows = fetchElectionDataset($sources["pr"], $userAgent, $shouldVerifyTls, (string) $caBundle);
-    $fptpRows = fetchElectionDataset($sources["fptp"], $userAgent, $shouldVerifyTls, (string) $caBundle);
+function createSecureJsonHandle(array $session, string $filePath)
+{
+    $url = "https://result.election.gov.np/Handlers/SecureJson.ashx?file=" . $filePath;
+    $ch = createCurlHandle($url, $session["cookieFile"], $session["userAgent"], $session["shouldVerifyTls"], $session["caBundle"]);
 
-    echo json_encode([
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        "Accept: application/json, text/javascript, */*; q=0.01",
+        "Accept-Language: en-US,en;q=0.6",
+        "Cache-Control: no-cache",
+        "Pragma: no-cache",
+        "Cookie: {$session['cookieHeader']}",
+        "Referer: {$session['referer']}",
+        "X-CSRF-Token: {$session['csrfToken']}",
+        "X-Requested-With: XMLHttpRequest",
+    ]);
+
+    return $ch;
+}
+
+function decodeJsonResponse(string $body, string $filePath): array
+{
+    $decoded = json_decode($body, true);
+
+    if (!is_array($decoded)) {
+        throw new RuntimeException("The upstream service returned a non-JSON response for {$filePath}.");
+    }
+
+    return $decoded;
+}
+
+function fetchSecureJsonFile(array $session, string $filePath): array
+{
+    $handle = createSecureJsonHandle($session, $filePath);
+    $response = curl_exec($handle);
+    $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+
+    if ($response === false) {
+        $error = curl_error($handle);
+        curl_close($handle);
+        throw new RuntimeException("Unable to fetch {$filePath}.", 0, new RuntimeException($error));
+    }
+
+    curl_close($handle);
+
+    if ($status < 200 || $status >= 300) {
+        throw new RuntimeException("The upstream endpoint rejected {$filePath}.");
+    }
+
+    return decodeJsonResponse($response, $filePath);
+}
+
+function fetchSecureJsonBatch(array $session, array $filePaths, int $concurrency = 12): array
+{
+    $results = [];
+
+    if ($filePaths === []) {
+        return $results;
+    }
+
+    $queue = array_values($filePaths);
+    $multi = curl_multi_init();
+    $active = [];
+
+    $addNext = static function () use (&$queue, &$active, $multi, $session): void {
+        if ($queue === []) {
+            return;
+        }
+
+        $filePath = array_shift($queue);
+        $handle = createSecureJsonHandle($session, $filePath);
+        $active[(int) $handle] = [
+            "handle" => $handle,
+            "filePath" => $filePath,
+        ];
+
+        curl_multi_add_handle($multi, $handle);
+    };
+
+    try {
+        for ($index = 0; $index < min($concurrency, count($queue)); $index++) {
+            $addNext();
+        }
+
+        do {
+            do {
+                $multiStatus = curl_multi_exec($multi, $running);
+            } while ($multiStatus === CURLM_CALL_MULTI_PERFORM);
+
+            if ($multiStatus !== CURLM_OK) {
+                throw new RuntimeException("The upstream batch request failed.");
+            }
+
+            while (($info = curl_multi_info_read($multi)) !== false) {
+                $handle = $info["handle"];
+                $key = (int) $handle;
+
+                if (!isset($active[$key])) {
+                    continue;
+                }
+
+                $filePath = $active[$key]["filePath"];
+                $response = curl_multi_getcontent($handle);
+                $status = (int) curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+
+                if ($info["result"] !== CURLE_OK) {
+                    $error = curl_error($handle);
+                    curl_multi_remove_handle($multi, $handle);
+                    curl_close($handle);
+                    unset($active[$key]);
+                    throw new RuntimeException("Unable to fetch {$filePath}.", 0, new RuntimeException($error));
+                }
+
+                if ($status < 200 || $status >= 300) {
+                    curl_multi_remove_handle($multi, $handle);
+                    curl_close($handle);
+                    unset($active[$key]);
+                    throw new RuntimeException("The upstream endpoint rejected {$filePath}.");
+                }
+
+                $results[$filePath] = decodeJsonResponse($response, $filePath);
+
+                curl_multi_remove_handle($multi, $handle);
+                curl_close($handle);
+                unset($active[$key]);
+                $addNext();
+            }
+
+            if ($running > 0) {
+                curl_multi_select($multi, 1.0);
+            }
+        } while ($running > 0 || $active !== []);
+    } finally {
+        foreach ($active as $item) {
+            curl_multi_remove_handle($multi, $item["handle"]);
+            curl_close($item["handle"]);
+        }
+
+        curl_multi_close($multi);
+    }
+
+    return $results;
+}
+
+function normalizePrRows(array $rows, int $seatCount): array
+{
+    $totalVotes = array_reduce($rows, static function (int $sum, array $row): int {
+        return $sum + (int) ($row["TotalVoteReceived"] ?? 0);
+    }, 0);
+
+    $normalized = [];
+
+    foreach ($rows as $row) {
+        $votes = (int) ($row["TotalVoteReceived"] ?? 0);
+        $voteShare = $totalVotes > 0 ? $votes / $totalVotes : 0;
+
+        $normalized[] = [
+            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
+            "symbolId" => (int) ($row["SymbolID"] ?? 0),
+            "prVotes" => $votes,
+            "prVoteShare" => $voteShare,
+            "prEstimatedSeats" => (int) round($voteShare * $seatCount),
+        ];
+    }
+
+    return $normalized;
+}
+
+function normalizeFptpRows(array $rows): array
+{
+    $normalized = [];
+
+    foreach ($rows as $row) {
+        $won = (int) ($row["TotWin"] ?? 0);
+        $leading = (int) ($row["TotLead"] ?? 0);
+        $candidates = (int) ($row["t_cand"] ?? 0);
+
+        $normalized[] = [
+            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
+            "symbolId" => (int) ($row["SymbolID"] ?? 0),
+            "fptpWon" => $won,
+            "fptpLeading" => $leading,
+            "fptpProjectedSeats" => $won + $leading,
+            "candidateCount" => $candidates,
+        ];
+    }
+
+    return $normalized;
+}
+
+function buildDashboardPayload(array $sources, string $userAgent, bool $shouldVerifyTls, string $caBundle): array
+{
+    $cached = readCache("dashboard_payload_v2", 120);
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $prRows = withSecureSession($sources["pr"], $userAgent, $shouldVerifyTls, $caBundle, static function (array $session) use ($sources): array {
+        return fetchSecureJsonFile($session, $sources["pr"]["dataFile"]);
+    });
+
+    $fptpRows = withSecureSession($sources["fptp"], $userAgent, $shouldVerifyTls, $caBundle, static function (array $session) use ($sources): array {
+        return fetchSecureJsonFile($session, $sources["fptp"]["dataFile"]);
+    });
+
+    $payload = [
         "pr" => normalizePrRows($prRows, $sources["pr"]["seatCount"]),
         "fptp" => normalizeFptpRows($fptpRows),
         "meta" => [
@@ -263,7 +433,142 @@ try {
             "totalSeats" => $sources["pr"]["seatCount"] + $sources["fptp"]["seatCount"],
             "generatedAt" => gmdate(DATE_ATOM),
         ],
-    ]);
+    ];
+
+    writeCache("dashboard_payload_v2", $payload);
+
+    return $payload;
+}
+
+function pickWinningCandidate(array $rows): ?array
+{
+    if ($rows === []) {
+        return null;
+    }
+
+    usort($rows, static function (array $left, array $right): int {
+        return ((int) ($right["TotalVoteReceived"] ?? 0)) <=> ((int) ($left["TotalVoteReceived"] ?? 0));
+    });
+
+    foreach ($rows as $row) {
+        if (strcasecmp((string) ($row["Remarks"] ?? ""), "Elected") === 0) {
+            return $row;
+        }
+    }
+
+    return $rows[0];
+}
+
+function buildMapPayload(array $sources, string $userAgent, bool $shouldVerifyTls, string $caBundle): array
+{
+    $cached = readCache("fptp_map_payload_v1", 900);
+
+    if ($cached !== null) {
+        return $cached;
+    }
+
+    $payload = withSecureSession($sources["map"], $userAgent, $shouldVerifyTls, $caBundle, static function (array $session): array {
+        $lookup = fetchSecureJsonFile($session, "JSONFiles/Election2082/HOR/Lookup/constituencies.json");
+        $districtIds = [];
+        $resultFiles = [];
+
+        foreach ($lookup as $district) {
+            $districtId = (int) ($district["distId"] ?? 0);
+            $constituencyCount = (int) ($district["consts"] ?? 0);
+
+            if ($districtId < 1 || $constituencyCount < 1) {
+                continue;
+            }
+
+            $districtIds[] = $districtId;
+
+            for ($constituencyId = 1; $constituencyId <= $constituencyCount; $constituencyId++) {
+                $resultFiles[] = "JSONFiles/Election2082/HOR/FPTP/HOR-{$districtId}-{$constituencyId}.json";
+            }
+        }
+
+        $districtIds = array_values(array_unique($districtIds));
+        $geoFiles = array_map(static function (int $districtId): string {
+            return "JSONFiles/JSONMap/geojson/Const/dist-{$districtId}.json";
+        }, $districtIds);
+
+        $geoJsonBatches = fetchSecureJsonBatch($session, $geoFiles, 10);
+        $resultBatches = fetchSecureJsonBatch($session, $resultFiles, 16);
+        $winnerByKey = [];
+
+        foreach ($resultBatches as $filePath => $rows) {
+            if (!preg_match('/HOR-(\d+)-(\d+)\.json$/', $filePath, $matches)) {
+                continue;
+            }
+
+            $districtId = (int) $matches[1];
+            $constituencyId = (int) $matches[2];
+            $winner = pickWinningCandidate($rows);
+
+            if ($winner === null) {
+                continue;
+            }
+
+            $winnerByKey["{$districtId}-{$constituencyId}"] = [
+                "winnerPartyName" => (string) ($winner["PoliticalPartyName"] ?? "Unknown Party"),
+                "winnerCandidateName" => (string) ($winner["CandidateName"] ?? "Unknown Candidate"),
+                "winnerVotes" => (int) ($winner["TotalVoteReceived"] ?? 0),
+                "winnerStatus" => (string) ($winner["Remarks"] ?? "Leading"),
+                "symbolId" => (int) ($winner["SymbolID"] ?? 0),
+                "districtName" => (string) ($winner["DistrictName"] ?? ""),
+                "stateName" => (string) ($winner["StateName"] ?? ""),
+            ];
+        }
+
+        $features = [];
+
+        foreach ($geoJsonBatches as $geoJson) {
+            foreach (($geoJson["features"] ?? []) as $feature) {
+                $properties = $feature["properties"] ?? [];
+                $districtId = (int) ($properties["DCODE"] ?? 0);
+                $constituencyId = (int) ($properties["F_CONST"] ?? 0);
+                $winner = $winnerByKey["{$districtId}-{$constituencyId}"] ?? null;
+
+                $feature["properties"]["districtId"] = $districtId;
+                $feature["properties"]["constituencyId"] = $constituencyId;
+                $feature["properties"]["winnerPartyName"] = $winner["winnerPartyName"] ?? null;
+                $feature["properties"]["winnerCandidateName"] = $winner["winnerCandidateName"] ?? null;
+                $feature["properties"]["winnerVotes"] = $winner["winnerVotes"] ?? 0;
+                $feature["properties"]["winnerStatus"] = $winner["winnerStatus"] ?? null;
+                $feature["properties"]["symbolId"] = $winner["symbolId"] ?? 0;
+                $feature["properties"]["districtName"] = $winner["districtName"] ?? null;
+                $feature["properties"]["stateName"] = $winner["stateName"] ?? null;
+
+                $features[] = $feature;
+            }
+        }
+
+        return [
+            "geojson" => [
+                "type" => "FeatureCollection",
+                "features" => $features,
+            ],
+            "meta" => [
+                "constituencyCount" => count($features),
+                "generatedAt" => gmdate(DATE_ATOM),
+            ],
+        ];
+    });
+
+    writeCache("fptp_map_payload_v1", $payload);
+
+    return $payload;
+}
+
+try {
+    $view = isset($_GET["view"]) ? (string) $_GET["view"] : "dashboard";
+
+    if ($view === "map") {
+        respondWithJson(buildMapPayload($sources, $userAgent, $shouldVerifyTls, (string) $caBundle));
+        exit;
+    }
+
+    respondWithJson(buildDashboardPayload($sources, $userAgent, $shouldVerifyTls, (string) $caBundle));
 } catch (Throwable $exception) {
     $details = ["message" => $exception->getMessage()];
     $previous = $exception->getPrevious();
