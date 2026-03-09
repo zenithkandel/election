@@ -336,6 +336,123 @@
         padding-left: 18px;
       }
 
+      .visual-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 24px;
+        margin-top: 24px;
+      }
+
+      .visual-panel {
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 24px;
+      }
+
+      .visual-panel header {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+      }
+
+      .visual-caption {
+        margin: 10px 0 18px;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .seat-map-shell,
+      .heat-map-shell {
+        min-height: 430px;
+        border-radius: 20px;
+        border: 1px solid var(--line);
+        background: rgba(255, 255, 255, 0.82);
+        overflow: hidden;
+        position: relative;
+      }
+
+      .seat-map-shell {
+        display: grid;
+        place-items: center;
+      }
+
+      #seatMap,
+      #heatMap {
+        width: 100%;
+        min-height: 430px;
+      }
+
+      .legend-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .legend-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .legend-swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        flex-shrink: 0;
+      }
+
+      .seat-svg,
+      .heat-svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      .map-tooltip {
+        position: fixed;
+        z-index: 20;
+        max-width: 260px;
+        padding: 12px 14px;
+        border-radius: 14px;
+        border: 1px solid rgba(31, 26, 22, 0.12);
+        background: rgba(255, 253, 248, 0.96);
+        color: var(--ink);
+        box-shadow: 0 18px 45px rgba(69, 44, 24, 0.16);
+        pointer-events: none;
+        opacity: 0;
+        transform: translateY(4px);
+        transition: opacity 120ms ease, transform 120ms ease;
+      }
+
+      .map-tooltip.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      .map-tooltip strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      .map-tooltip p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+        font-size: 0.9rem;
+      }
+
       .table-panel header {
         display: flex;
         justify-content: space-between;
@@ -463,7 +580,8 @@
 
       @media (max-width: 1024px) {
         .hero,
-        .layout {
+        .layout,
+        .visual-grid {
           grid-template-columns: 1fr;
         }
 
@@ -480,6 +598,7 @@
       @media (max-width: 720px) {
         .hero-panel,
         .summary-panel,
+        .visual-panel,
         .control-panel,
         .conclusion-panel,
         .table-panel {
@@ -535,6 +654,38 @@
           <h2 id="summary-title">At a glance</h2>
           <div class="summary-grid" id="summaryGrid"></div>
         </aside>
+      </section>
+
+      <section class="visual-grid" aria-label="Visual parliament views">
+        <article class="visual-panel" aria-labelledby="seat-map-title">
+          <header>
+            <div>
+              <h2 id="seat-map-title">Federal seat map</h2>
+            </div>
+          </header>
+          <p class="visual-caption">
+            A semicircle projection of all 275 House seats using the current combined PR estimate and FPTP won-plus-leading totals.
+          </p>
+          <div class="seat-map-shell">
+            <div id="seatMap" class="status">Loading seat map.</div>
+          </div>
+          <div class="legend-list" id="seatLegend"></div>
+        </article>
+
+        <article class="visual-panel" aria-labelledby="heat-map-title">
+          <header>
+            <div>
+              <h2 id="heat-map-title">FPTP winner heat map</h2>
+            </div>
+          </header>
+          <p class="visual-caption">
+            Federal constituencies are colored by the currently leading or elected party, using the same palette as the seat map and party table.
+          </p>
+          <div class="heat-map-shell">
+            <div id="heatMap" class="status">Loading constituency map.</div>
+          </div>
+          <div class="legend-list" id="mapLegend"></div>
+        </article>
       </section>
 
       <section class="layout">
@@ -650,20 +801,43 @@
       </section>
     </main>
 
+    <div class="map-tooltip" id="mapTooltip" aria-hidden="true"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <script>
       const state = {
         data: [],
         meta: null,
         lastUpdated: null,
+        mapData: null,
       };
 
       const SIMPLE_MAJORITY_MARK = 138;
+      const PARTY_PALETTE = [
+        "#79c0ea",
+        "#4f722d",
+        "#ef3f23",
+        "#8f1f16",
+        "#1e1110",
+        "#dbd7d4",
+        "#e6bc5c",
+        "#3d67e5",
+        "#6f3fd6",
+        "#0e8a78",
+        "#b556b3",
+        "#8a6f4d",
+      ];
       const resultsBody = document.getElementById("resultsBody");
       const summaryGrid = document.getElementById("summaryGrid");
       const conclusionBody = document.getElementById("conclusionBody");
       const heroMeta = document.getElementById("heroMeta");
       const tableMeta = document.getElementById("tableMeta");
       const filterSummary = document.getElementById("filterSummary");
+      const seatMap = document.getElementById("seatMap");
+      const seatLegend = document.getElementById("seatLegend");
+      const heatMap = document.getElementById("heatMap");
+      const mapLegend = document.getElementById("mapLegend");
+      const mapTooltip = document.getElementById("mapTooltip");
       const searchInput = document.getElementById("searchInput");
       const chamberFilter = document.getElementById("chamberFilter");
       const sortBy = document.getElementById("sortBy");
@@ -689,6 +863,273 @@
           dateStyle: "medium",
           timeStyle: "short",
         }).format(new Date(timestamp));
+      }
+
+      function hashString(text) {
+        let hash = 0;
+
+        for (let index = 0; index < text.length; index += 1) {
+          hash = (hash << 5) - hash + text.charCodeAt(index);
+          hash |= 0;
+        }
+
+        return Math.abs(hash);
+      }
+
+      function getFallbackColor(partyName) {
+        const hue = hashString(partyName) % 360;
+        return `hsl(${hue} 52% 48%)`;
+      }
+
+      function getPartyColorMap() {
+        const rankedParties = [...state.data].sort(
+          (left, right) => right.projectedFederalSeats - left.projectedFederalSeats,
+        );
+        const colorMap = new Map();
+
+        rankedParties.forEach((party, index) => {
+          colorMap.set(
+            party.partyName,
+            PARTY_PALETTE[index] || getFallbackColor(party.partyName),
+          );
+        });
+
+        return colorMap;
+      }
+
+      function renderLegend(container, items, colorMap, metricKey) {
+        if (!items.length) {
+          container.innerHTML = "";
+          return;
+        }
+
+        container.innerHTML = items
+          .map(
+            (party) => `
+              <div class="legend-item">
+                <span class="legend-swatch" style="background:${colorMap.get(party.partyName) || getFallbackColor(party.partyName)}"></span>
+                <span>${party.partyName}: ${formatNumber(party[metricKey])}</span>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      function buildSeatPositions(totalSeats, rowCount = 11) {
+        const radii = [];
+        const counts = [];
+        const innerRadius = 0.34;
+        const outerRadius = 0.94;
+        let weightSum = 0;
+
+        for (let row = 0; row < rowCount; row += 1) {
+          const t = rowCount === 1 ? 0 : row / (rowCount - 1);
+          const radius = innerRadius + (outerRadius - innerRadius) * t;
+          radii.push(radius);
+          weightSum += radius;
+        }
+
+        let assigned = 0;
+
+        radii.forEach((radius, row) => {
+          const remainingRows = rowCount - row;
+          const remainingSeats = totalSeats - assigned;
+          const estimated = Math.max(
+            6,
+            Math.round((radius / weightSum) * totalSeats),
+          );
+          const count = row === rowCount - 1 ? remainingSeats : Math.min(estimated, remainingSeats - (remainingRows - 1) * 6);
+          counts.push(count);
+          assigned += count;
+        });
+
+        const positions = [];
+
+        counts.forEach((count, row) => {
+          const radius = radii[row];
+
+          for (let index = 0; index < count; index += 1) {
+            const angle = Math.PI - ((index + 0.5) / count) * Math.PI;
+            const x = 360 + Math.cos(angle) * radius * 265;
+            const y = 350 - Math.sin(angle) * radius * 250;
+            positions.push({ x, y });
+          }
+        });
+
+        return positions;
+      }
+
+      function renderSeatMap(filteredData) {
+        if (!state.meta || !state.data.length) {
+          seatMap.innerHTML = '<div class="status">Waiting for seat data.</div>';
+          seatLegend.innerHTML = "";
+          return;
+        }
+
+        const colorMap = getPartyColorMap();
+        const visibleParties = new Set(filteredData.map((party) => party.partyName));
+        const seats = [];
+
+        [...state.data]
+          .sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats)
+          .forEach((party) => {
+            for (let seat = 0; seat < party.projectedFederalSeats; seat += 1) {
+              seats.push({
+                partyName: party.partyName,
+                color: colorMap.get(party.partyName) || getFallbackColor(party.partyName),
+                visible: visibleParties.size === state.data.length || visibleParties.has(party.partyName),
+              });
+            }
+          });
+
+        const positions = buildSeatPositions(state.meta.totalSeats);
+        seatMap.innerHTML = `
+          <svg class="seat-svg" viewBox="0 0 720 430" role="img" aria-label="Federal parliament seat map showing projected party seat counts.">
+            <g id="seatDots"></g>
+            <g>
+              <text x="360" y="240" text-anchor="middle" font-size="18" font-weight="700" fill="#61564c">Projected chamber</text>
+              <text x="360" y="276" text-anchor="middle" font-size="56" font-weight="800" fill="#1f1a16">${formatNumber(state.meta.totalSeats)}</text>
+              <text x="360" y="308" text-anchor="middle" font-size="16" fill="#61564c">2/3 threshold: ${formatNumber(getTwoThirdsMark())} seats</text>
+            </g>
+          </svg>
+        `;
+
+        const seatDots = seatMap.querySelector("#seatDots");
+
+        seats.forEach((seat, index) => {
+          const position = positions[index];
+          if (!position) {
+            return;
+          }
+
+          const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+          circle.setAttribute("cx", position.x.toFixed(2));
+          circle.setAttribute("cy", position.y.toFixed(2));
+          circle.setAttribute("r", "6.2");
+          circle.setAttribute("fill", seat.color);
+          circle.setAttribute("fill-opacity", seat.visible ? "1" : "0.16");
+          seatDots.appendChild(circle);
+        });
+
+        renderLegend(
+          seatLegend,
+          [...state.data]
+            .sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats)
+            .slice(0, 8),
+          colorMap,
+          "projectedFederalSeats",
+        );
+      }
+
+      function renderHeatMap(filteredData) {
+        if (!state.mapData) {
+          heatMap.innerHTML = '<div class="status">Loading constituency map.</div>';
+          mapLegend.innerHTML = "";
+          return;
+        }
+
+        if (!window.d3) {
+          heatMap.innerHTML = '<div class="status error">D3 failed to load, so the constituency map could not be rendered.</div>';
+          return;
+        }
+
+        const geojson = state.mapData.geojson;
+
+        if (!geojson || !Array.isArray(geojson.features) || !geojson.features.length) {
+          heatMap.innerHTML = '<div class="status">No constituency geometry is available.</div>';
+          mapLegend.innerHTML = "";
+          return;
+        }
+
+        const colorMap = getPartyColorMap();
+        const visibleParties = new Set(filteredData.map((party) => party.partyName));
+        const width = Math.max(320, heatMap.clientWidth || 620);
+        const height = Math.max(420, Math.round(width * 0.62));
+        const projection = d3.geoMercator().fitSize([width, height], geojson);
+        const path = d3.geoPath(projection);
+        const selectedAll = visibleParties.size === state.data.length;
+
+        heatMap.innerHTML = "";
+        const svg = d3
+          .select(heatMap)
+          .append("svg")
+          .attr("class", "heat-svg")
+          .attr("viewBox", `0 0 ${width} ${height}`)
+          .attr("role", "img")
+          .attr(
+            "aria-label",
+            "Federal constituency winner map colored by currently leading or elected party.",
+          );
+
+        svg
+          .append("g")
+          .selectAll("path")
+          .data(geojson.features)
+          .join("path")
+          .attr("d", path)
+          .attr("fill", (feature) => {
+            const partyName = feature.properties.winnerPartyName;
+            if (!partyName) {
+              return "#d8d3cb";
+            }
+
+            return colorMap.get(partyName) || getFallbackColor(partyName);
+          })
+          .attr("fill-opacity", (feature) => {
+            const partyName = feature.properties.winnerPartyName;
+
+            if (!partyName) {
+              return 0.55;
+            }
+
+            if (!selectedAll && !visibleParties.has(partyName)) {
+              return 0.18;
+            }
+
+            return feature.properties.winnerStatus === "Elected" ? 0.96 : 0.72;
+          })
+          .attr("stroke", "#fff")
+          .attr("stroke-width", 1.15)
+          .on("mousemove", (event, feature) => {
+            const partyName = feature.properties.winnerPartyName || "No winner data";
+            const constituencyLabel = `${feature.properties.districtName || `District ${feature.properties.districtId}`}, constituency ${feature.properties.constituencyId}`;
+            mapTooltip.innerHTML = `
+              <strong>${constituencyLabel}</strong>
+              <p>${partyName}</p>
+              <p>${feature.properties.winnerCandidateName || "Candidate not available"}</p>
+              <p>Votes: ${formatNumber(feature.properties.winnerVotes || 0)}${feature.properties.winnerStatus ? ` • ${feature.properties.winnerStatus}` : ""}</p>
+            `;
+            mapTooltip.classList.add("is-visible");
+            mapTooltip.setAttribute("aria-hidden", "false");
+            mapTooltip.style.left = `${event.clientX + 14}px`;
+            mapTooltip.style.top = `${event.clientY + 14}px`;
+          })
+          .on("mouseleave", () => {
+            mapTooltip.classList.remove("is-visible");
+            mapTooltip.setAttribute("aria-hidden", "true");
+          });
+
+        const countsByParty = new Map();
+        geojson.features.forEach((feature) => {
+          const partyName = feature.properties.winnerPartyName;
+          if (!partyName) {
+            return;
+          }
+
+          countsByParty.set(partyName, (countsByParty.get(partyName) || 0) + 1);
+        });
+
+        const mapLegendItems = [...countsByParty.entries()]
+          .map(([partyName, seats]) => ({ partyName, mapSeats: seats }))
+          .sort((left, right) => right.mapSeats - left.mapSeats)
+          .slice(0, 8);
+
+        renderLegend(mapLegend, mapLegendItems, colorMap, "mapSeats");
+      }
+
+      function renderVisuals(filteredData) {
+        renderSeatMap(filteredData);
+        renderHeatMap(filteredData);
       }
 
       function getSymbolUrl(symbolId) {
@@ -982,6 +1423,7 @@
         const filteredData = getFilteredData();
         renderSummary(filteredData);
         renderConclusion(filteredData);
+        renderVisuals(filteredData);
         renderTable(filteredData);
 
         tableMeta.textContent = `Showing ${formatNumber(filteredData.length)} parties sorted by ${sortBy.options[sortBy.selectedIndex].text.toLowerCase()}.`;
@@ -1016,6 +1458,7 @@
 
           renderHeroMeta(payload.meta);
           render();
+          loadMapData();
         } catch (error) {
           resultsBody.innerHTML = `
             <tr>
@@ -1029,6 +1472,29 @@
           tableMeta.textContent =
             "The dashboard could not load upstream election data.";
           filterSummary.textContent = "Refresh to try again.";
+          seatMap.innerHTML = `<div class="status error">${error.message}</div>`;
+          heatMap.innerHTML = `<div class="status error">${error.message}</div>`;
+        }
+      }
+
+      async function loadMapData() {
+        heatMap.innerHTML = '<div class="status">Loading constituency map.</div>';
+
+        try {
+          const response = await fetch("api/results.php?view=map", {
+            cache: "no-store",
+          });
+          const payload = await response.json();
+
+          if (!response.ok || payload.error) {
+            throw new Error(payload.error || "Unable to load constituency map data.");
+          }
+
+          state.mapData = payload;
+          render();
+        } catch (error) {
+          heatMap.innerHTML = `<div class="status error">${error.message}</div>`;
+          mapLegend.innerHTML = "";
         }
       }
 
