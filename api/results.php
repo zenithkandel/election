@@ -564,7 +564,12 @@ try {
     $view = isset($_GET["view"]) ? (string) $_GET["view"] : "dashboard";
 
     if ($view === "map") {
-        respondWithJson(buildMapPayload($sources, $userAgent, $shouldVerifyTls, (string) $caBundle));
+        respondWithJson([
+            "iframeUrl" => "https://result.election.gov.np/MapElectionResult2082.aspx",
+            "meta" => [
+                "generatedAt" => gmdate(DATE_ATOM),
+            ],
+        ]);
         exit;
     }
 

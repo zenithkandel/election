@@ -386,6 +386,14 @@
         min-height: 430px;
       }
 
+      .heat-frame {
+        width: 100%;
+        height: 430px;
+        border: 0;
+        display: block;
+        background: #f5f1ea;
+      }
+
       .legend-list {
         display: flex;
         flex-wrap: wrap;
@@ -410,45 +418,11 @@
         height: 12px;
         border-radius: 999px;
         border: 1px solid rgba(0, 0, 0, 0.08);
-        flex-shrink: 0;
-      }
+        .seat-svg {
 
       .seat-svg,
       .heat-svg {
         width: 100%;
-        height: 100%;
-        display: block;
-      }
-
-      .map-tooltip {
-        position: fixed;
-        z-index: 20;
-        max-width: 260px;
-        padding: 12px 14px;
-        border-radius: 14px;
-        border: 1px solid rgba(31, 26, 22, 0.12);
-        background: rgba(255, 253, 248, 0.96);
-        color: var(--ink);
-        box-shadow: 0 18px 45px rgba(69, 44, 24, 0.16);
-        pointer-events: none;
-        opacity: 0;
-        transform: translateY(4px);
-        transition:
-          opacity 120ms ease,
-          transform 120ms ease;
-      }
-
-      .map-tooltip.is-visible {
-        opacity: 1;
-        transform: translateY(0);
-      }
-
-      .map-tooltip strong {
-        display: block;
-        margin-bottom: 4px;
-      }
-
-      .map-tooltip p {
         margin: 0;
         color: var(--muted);
         line-height: 1.45;
@@ -682,9 +656,9 @@
             </div>
           </header>
           <p class="visual-caption">
-            Federal constituencies are colored by the currently leading or
-            elected party, using the same palette as the seat map and party
-            table.
+            The official Election Commission constituency map is embedded here
+            so you can inspect the same winner heat map view shown on the source
+            site.
           </p>
           <div class="heat-map-shell">
             <div id="heatMap" class="status">Loading constituency map.</div>
@@ -806,15 +780,11 @@
       </section>
     </main>
 
-    <div class="map-tooltip" id="mapTooltip" aria-hidden="true"></div>
-
-    <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
     <script>
       const state = {
         data: [],
         meta: null,
         lastUpdated: null,
-        mapData: null,
       };
 
       const SIMPLE_MAJORITY_MARK = 138;
@@ -842,7 +812,6 @@
       const seatLegend = document.getElementById("seatLegend");
       const heatMap = document.getElementById("heatMap");
       const mapLegend = document.getElementById("mapLegend");
-      const mapTooltip = document.getElementById("mapTooltip");
       const searchInput = document.getElementById("searchInput");
       const chamberFilter = document.getElementById("chamberFilter");
       const sortBy = document.getElementById("sortBy");
@@ -1047,119 +1016,24 @@
       }
 
       function renderHeatMap(filteredData) {
-        if (!state.mapData) {
-          heatMap.innerHTML =
-            '<div class="status">Loading constituency map.</div>';
-          mapLegend.innerHTML = "";
-          return;
+        if (!heatMap.dataset.embedded) {
+          heatMap.innerHTML = `
+            <iframe
+              class="heat-frame"
+              title="Official Nepal constituency winner map"
+              loading="lazy"
+              src="https://result.election.gov.np/MapElectionResult2082.aspx"
+              referrerpolicy="no-referrer"
+            ></iframe>
+          `;
+          heatMap.dataset.embedded = "true";
         }
 
-        if (!window.d3) {
-          heatMap.innerHTML =
-            '<div class="status error">D3 failed to load, so the constituency map could not be rendered.</div>';
-          return;
-        }
-
-        const geojson = state.mapData.geojson;
-
-        if (
-          !geojson ||
-          !Array.isArray(geojson.features) ||
-          !geojson.features.length
-        ) {
-          heatMap.innerHTML =
-            '<div class="status">No constituency geometry is available.</div>';
-          mapLegend.innerHTML = "";
-          return;
-        }
-
-        const colorMap = getPartyColorMap();
-        const visibleParties = new Set(
-          filteredData.map((party) => party.partyName),
-        );
-        const width = Math.max(320, heatMap.clientWidth || 620);
-        const height = Math.max(420, Math.round(width * 0.62));
-        const projection = d3.geoMercator().fitSize([width, height], geojson);
-        const path = d3.geoPath(projection);
-        const selectedAll = visibleParties.size === state.data.length;
-
-        heatMap.innerHTML = "";
-        const svg = d3
-          .select(heatMap)
-          .append("svg")
-          .attr("class", "heat-svg")
-          .attr("viewBox", `0 0 ${width} ${height}`)
-          .attr("role", "img")
-          .attr(
-            "aria-label",
-            "Federal constituency winner map colored by currently leading or elected party.",
-          );
-
-        svg
-          .append("g")
-          .selectAll("path")
-          .data(geojson.features)
-          .join("path")
-          .attr("d", path)
-          .attr("fill", (feature) => {
-            const partyName = feature.properties.winnerPartyName;
-            if (!partyName) {
-              return "#d8d3cb";
-            }
-
-            return colorMap.get(partyName) || getFallbackColor(partyName);
-          })
-          .attr("fill-opacity", (feature) => {
-            const partyName = feature.properties.winnerPartyName;
-
-            if (!partyName) {
-              return 0.55;
-            }
-
-            if (!selectedAll && !visibleParties.has(partyName)) {
-              return 0.18;
-            }
-
-            return feature.properties.winnerStatus === "Elected" ? 0.96 : 0.72;
-          })
-          .attr("stroke", "#fff")
-          .attr("stroke-width", 1.15)
-          .on("mousemove", (event, feature) => {
-            const partyName =
-              feature.properties.winnerPartyName || "No winner data";
-            const constituencyLabel = `${feature.properties.districtName || `District ${feature.properties.districtId}`}, constituency ${feature.properties.constituencyId}`;
-            mapTooltip.innerHTML = `
-              <strong>${constituencyLabel}</strong>
-              <p>${partyName}</p>
-              <p>${feature.properties.winnerCandidateName || "Candidate not available"}</p>
-              <p>Votes: ${formatNumber(feature.properties.winnerVotes || 0)}${feature.properties.winnerStatus ? ` • ${feature.properties.winnerStatus}` : ""}</p>
-            `;
-            mapTooltip.classList.add("is-visible");
-            mapTooltip.setAttribute("aria-hidden", "false");
-            mapTooltip.style.left = `${event.clientX + 14}px`;
-            mapTooltip.style.top = `${event.clientY + 14}px`;
-          })
-          .on("mouseleave", () => {
-            mapTooltip.classList.remove("is-visible");
-            mapTooltip.setAttribute("aria-hidden", "true");
-          });
-
-        const countsByParty = new Map();
-        geojson.features.forEach((feature) => {
-          const partyName = feature.properties.winnerPartyName;
-          if (!partyName) {
-            return;
-          }
-
-          countsByParty.set(partyName, (countsByParty.get(partyName) || 0) + 1);
-        });
-
-        const mapLegendItems = [...countsByParty.entries()]
-          .map(([partyName, seats]) => ({ partyName, mapSeats: seats }))
-          .sort((left, right) => right.mapSeats - left.mapSeats)
-          .slice(0, 8);
-
-        renderLegend(mapLegend, mapLegendItems, colorMap, "mapSeats");
+        mapLegend.innerHTML = `
+          <div class="legend-item">
+            <span>Live official constituency map from Election Commission, Nepal</span>
+          </div>
+        `;
       }
 
       function renderVisuals(filteredData) {
@@ -1493,7 +1367,6 @@
 
           renderHeroMeta(payload.meta);
           render();
-          loadMapData();
         } catch (error) {
           resultsBody.innerHTML = `
             <tr>
@@ -1509,30 +1382,6 @@
           filterSummary.textContent = "Refresh to try again.";
           seatMap.innerHTML = `<div class="status error">${error.message}</div>`;
           heatMap.innerHTML = `<div class="status error">${error.message}</div>`;
-        }
-      }
-
-      async function loadMapData() {
-        heatMap.innerHTML =
-          '<div class="status">Loading constituency map.</div>';
-
-        try {
-          const response = await fetch("api/results.php?view=map", {
-            cache: "no-store",
-          });
-          const payload = await response.json();
-
-          if (!response.ok || payload.error) {
-            throw new Error(
-              payload.error || "Unable to load constituency map data.",
-            );
-          }
-
-          state.mapData = payload;
-          render();
-        } catch (error) {
-          heatMap.innerHTML = `<div class="status error">${error.message}</div>`;
-          mapLegend.innerHTML = "";
         }
       }
 
