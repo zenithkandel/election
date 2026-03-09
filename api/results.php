@@ -83,8 +83,31 @@ function parseCookiesFromJar(string $cookieFile): array
     return $cookies;
 }
 
+function parseCookiesFromHeaders(string $rawHeaders): array
+{
+    $cookies = [];
+    $headerLines = preg_split('/\r\n|\r|\n/', $rawHeaders) ?: [];
+
+    foreach ($headerLines as $line) {
+        if (stripos($line, 'Set-Cookie:') !== 0) {
+            continue;
+        }
+
+        $cookiePair = trim(substr($line, strlen('Set-Cookie:')));
+        $segments = explode(';', $cookiePair);
+        $nameValue = explode('=', trim($segments[0]), 2);
+
+        if (count($nameValue) === 2) {
+            $cookies[$nameValue[0]] = $nameValue[1];
+        }
+    }
+
+    return $cookies;
+}
+
 $bootstrapRequest = createCurlHandle($sourcePageUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
 curl_setopt_array($bootstrapRequest, [
+    CURLOPT_HEADER => true,
     CURLOPT_HTTPHEADER => [
         "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         "Accept-Language: en-US,en;q=0.6",
@@ -95,6 +118,7 @@ curl_setopt_array($bootstrapRequest, [
 
 $bootstrapResponse = curl_exec($bootstrapRequest);
 $bootstrapStatus = (int) curl_getinfo($bootstrapRequest, CURLINFO_RESPONSE_CODE);
+$bootstrapHeaderSize = (int) curl_getinfo($bootstrapRequest, CURLINFO_HEADER_SIZE);
 
 if ($bootstrapResponse === false) {
     $error = curl_error($bootstrapRequest);
@@ -112,14 +136,23 @@ if ($bootstrapStatus < 200 || $bootstrapStatus >= 300) {
     exit;
 }
 
-$cookies = parseCookiesFromJar($cookieFile);
-$csrfToken = $cookies["CsrfToken"] ?? null;
+$bootstrapHeaders = substr($bootstrapResponse, 0, $bootstrapHeaderSize);
+$cookies = parseCookiesFromHeaders($bootstrapHeaders);
 
-if ($csrfToken === null || $csrfToken === "") {
+if ($cookies === []) {
+    $cookies = parseCookiesFromJar($cookieFile);
+}
+
+$csrfToken = $cookies["CsrfToken"] ?? null;
+$sessionId = $cookies["ASP.NET_SessionId"] ?? null;
+
+if ($csrfToken === null || $csrfToken === "" || $sessionId === null || $sessionId === "") {
     @unlink($cookieFile);
-    respondWithError(502, "Unable to obtain the upstream CSRF token.");
+    respondWithError(502, "Unable to obtain the upstream session cookies.", ["cookies" => array_keys($cookies)]);
     exit;
 }
+
+$cookieHeader = sprintf('ASP.NET_SessionId=%s; CsrfToken=%s', $sessionId, $csrfToken);
 
 $dataRequest = createCurlHandle($dataUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
 curl_setopt_array($dataRequest, [
@@ -128,6 +161,7 @@ curl_setopt_array($dataRequest, [
         "Accept-Language: en-US,en;q=0.6",
         "Cache-Control: no-cache",
         "Pragma: no-cache",
+        "Cookie: {$cookieHeader}",
         "Referer: https://result.election.gov.np/PRVoteChartResult2082.aspx",
         "X-CSRF-Token: {$csrfToken}",
         "X-Requested-With: XMLHttpRequest",
