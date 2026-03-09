@@ -3,18 +3,24 @@
 header("Content-Type: application/json");
 header("Access-Control-Allow-Origin: *");
 
-$sourcePageUrl = "https://result.election.gov.np/PRVoteChartResult2082.aspx";
-$dataUrl = "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/PRHoRPartyTop5.txt";
 $userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
-$cookieFile = tempnam(sys_get_temp_dir(), "election_cookie_");
 $caBundle = ini_get("curl.cainfo") ?: ini_get("openssl.cafile");
 $shouldVerifyTls = $caBundle !== false && $caBundle !== "";
 
-if ($cookieFile === false) {
-    http_response_code(500);
-    echo json_encode(["error" => "Unable to create a temporary cookie store."]);
-    exit;
-}
+$sources = [
+    "pr" => [
+        "sourcePageUrl" => "https://result.election.gov.np/PRVoteChartResult2082.aspx",
+        "dataUrl" => "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/PRHoRPartyTop5.txt",
+        "referer" => "https://result.election.gov.np/PRVoteChartResult2082.aspx",
+        "seatCount" => 110,
+    ],
+    "fptp" => [
+        "sourcePageUrl" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
+        "dataUrl" => "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/HoRPartyTop5.txt",
+        "referer" => "https://result.election.gov.np/FPTPWLChartResult2082.aspx",
+        "seatCount" => 165,
+    ],
+];
 
 function respondWithError(int $statusCode, string $message, ?array $details = null): void
 {
@@ -69,7 +75,7 @@ function parseCookiesFromJar(string $cookieFile): array
     }
 
     foreach ($lines as $line) {
-        if ($line[0] === '#') {
+        if ($line === "" || $line[0] === '#') {
             continue;
         }
 
@@ -105,93 +111,166 @@ function parseCookiesFromHeaders(string $rawHeaders): array
     return $cookies;
 }
 
-$bootstrapRequest = createCurlHandle($sourcePageUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
-curl_setopt_array($bootstrapRequest, [
-    CURLOPT_HEADER => true,
-    CURLOPT_HTTPHEADER => [
-        "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language: en-US,en;q=0.6",
-        "Cache-Control: no-cache",
-        "Pragma: no-cache",
-    ],
-]);
+function normalizePrRows(array $rows, int $seatCount): array
+{
+    $totalVotes = array_reduce($rows, static function (int $sum, array $row): int {
+        return $sum + (int) ($row["TotalVoteReceived"] ?? 0);
+    }, 0);
 
-$bootstrapResponse = curl_exec($bootstrapRequest);
-$bootstrapStatus = (int) curl_getinfo($bootstrapRequest, CURLINFO_RESPONSE_CODE);
-$bootstrapHeaderSize = (int) curl_getinfo($bootstrapRequest, CURLINFO_HEADER_SIZE);
+    $normalized = [];
 
-if ($bootstrapResponse === false) {
-    $error = curl_error($bootstrapRequest);
-    curl_close($bootstrapRequest);
-    @unlink($cookieFile);
-    respondWithError(502, "Unable to start the upstream session.", ["curl" => $error]);
-    exit;
+    foreach ($rows as $row) {
+        $votes = (int) ($row["TotalVoteReceived"] ?? 0);
+        $voteShare = $totalVotes > 0 ? $votes / $totalVotes : 0;
+
+        $normalized[] = [
+            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
+            "symbolId" => (int) ($row["SymbolID"] ?? 0),
+            "prVotes" => $votes,
+            "prVoteShare" => $voteShare,
+            "prEstimatedSeats" => (int) round($voteShare * $seatCount),
+        ];
+    }
+
+    return $normalized;
 }
 
-curl_close($bootstrapRequest);
+function normalizeFptpRows(array $rows): array
+{
+    $normalized = [];
 
-if ($bootstrapStatus < 200 || $bootstrapStatus >= 300) {
-    @unlink($cookieFile);
-    respondWithError(502, "The upstream chart page did not return a successful response.", ["status" => $bootstrapStatus]);
-    exit;
+    foreach ($rows as $row) {
+        $won = (int) ($row["TotWin"] ?? 0);
+        $leading = (int) ($row["TotLead"] ?? 0);
+        $candidates = (int) ($row["t_cand"] ?? 0);
+
+        $normalized[] = [
+            "partyName" => (string) ($row["PoliticalPartyName"] ?? "Unknown Party"),
+            "symbolId" => (int) ($row["SymbolID"] ?? 0),
+            "fptpWon" => $won,
+            "fptpLeading" => $leading,
+            "fptpProjectedSeats" => $won + $leading,
+            "candidateCount" => $candidates,
+        ];
+    }
+
+    return $normalized;
 }
 
-$bootstrapHeaders = substr($bootstrapResponse, 0, $bootstrapHeaderSize);
-$cookies = parseCookiesFromHeaders($bootstrapHeaders);
+function fetchElectionDataset(array $config, string $userAgent, bool $shouldVerifyTls, string $caBundle): array
+{
+    $cookieFile = tempnam(sys_get_temp_dir(), "election_cookie_");
 
-if ($cookies === []) {
-    $cookies = parseCookiesFromJar($cookieFile);
+    if ($cookieFile === false) {
+        throw new RuntimeException("Unable to create a temporary cookie store.");
+    }
+
+    try {
+        $bootstrapRequest = createCurlHandle($config["sourcePageUrl"], $cookieFile, $userAgent, $shouldVerifyTls, $caBundle);
+        curl_setopt_array($bootstrapRequest, [
+            CURLOPT_HEADER => true,
+            CURLOPT_HTTPHEADER => [
+                "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language: en-US,en;q=0.6",
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+            ],
+        ]);
+
+        $bootstrapResponse = curl_exec($bootstrapRequest);
+        $bootstrapStatus = (int) curl_getinfo($bootstrapRequest, CURLINFO_RESPONSE_CODE);
+        $bootstrapHeaderSize = (int) curl_getinfo($bootstrapRequest, CURLINFO_HEADER_SIZE);
+
+        if ($bootstrapResponse === false) {
+            $error = curl_error($bootstrapRequest);
+            curl_close($bootstrapRequest);
+            throw new RuntimeException("Unable to start the upstream session.", 0, new RuntimeException($error));
+        }
+
+        curl_close($bootstrapRequest);
+
+        if ($bootstrapStatus < 200 || $bootstrapStatus >= 300) {
+            throw new RuntimeException("The upstream chart page did not return a successful response.");
+        }
+
+        $bootstrapHeaders = substr($bootstrapResponse, 0, $bootstrapHeaderSize);
+        $cookies = parseCookiesFromHeaders($bootstrapHeaders);
+
+        if ($cookies === []) {
+            $cookies = parseCookiesFromJar($cookieFile);
+        }
+
+        $csrfToken = $cookies["CsrfToken"] ?? null;
+        $sessionId = $cookies["ASP.NET_SessionId"] ?? null;
+
+        if ($csrfToken === null || $csrfToken === "" || $sessionId === null || $sessionId === "") {
+            throw new RuntimeException("Unable to obtain the upstream session cookies.");
+        }
+
+        $cookieHeader = sprintf("ASP.NET_SessionId=%s; CsrfToken=%s", $sessionId, $csrfToken);
+
+        $dataRequest = createCurlHandle($config["dataUrl"], $cookieFile, $userAgent, $shouldVerifyTls, $caBundle);
+        curl_setopt_array($dataRequest, [
+            CURLOPT_HTTPHEADER => [
+                "Accept: application/json, text/javascript, */*; q=0.01",
+                "Accept-Language: en-US,en;q=0.6",
+                "Cache-Control: no-cache",
+                "Pragma: no-cache",
+                "Cookie: {$cookieHeader}",
+                "Referer: {$config['referer']}",
+                "X-CSRF-Token: {$csrfToken}",
+                "X-Requested-With: XMLHttpRequest",
+            ],
+        ]);
+
+        $response = curl_exec($dataRequest);
+        $responseStatus = (int) curl_getinfo($dataRequest, CURLINFO_RESPONSE_CODE);
+
+        if ($response === false) {
+            $error = curl_error($dataRequest);
+            curl_close($dataRequest);
+            throw new RuntimeException("Unable to fetch the upstream results.", 0, new RuntimeException($error));
+        }
+
+        curl_close($dataRequest);
+
+        if ($responseStatus < 200 || $responseStatus >= 300) {
+            throw new RuntimeException("The upstream results endpoint rejected the request.");
+        }
+
+        $decoded = json_decode($response, true);
+
+        if (!is_array($decoded)) {
+            throw new RuntimeException("The upstream service returned a non-JSON response.");
+        }
+
+        return $decoded;
+    } finally {
+        @unlink($cookieFile);
+    }
 }
 
-$csrfToken = $cookies["CsrfToken"] ?? null;
-$sessionId = $cookies["ASP.NET_SessionId"] ?? null;
+try {
+    $prRows = fetchElectionDataset($sources["pr"], $userAgent, $shouldVerifyTls, (string) $caBundle);
+    $fptpRows = fetchElectionDataset($sources["fptp"], $userAgent, $shouldVerifyTls, (string) $caBundle);
 
-if ($csrfToken === null || $csrfToken === "" || $sessionId === null || $sessionId === "") {
-    @unlink($cookieFile);
-    respondWithError(502, "Unable to obtain the upstream session cookies.", ["cookies" => array_keys($cookies)]);
-    exit;
+    echo json_encode([
+        "pr" => normalizePrRows($prRows, $sources["pr"]["seatCount"]),
+        "fptp" => normalizeFptpRows($fptpRows),
+        "meta" => [
+            "prSeats" => $sources["pr"]["seatCount"],
+            "fptpSeats" => $sources["fptp"]["seatCount"],
+            "totalSeats" => $sources["pr"]["seatCount"] + $sources["fptp"]["seatCount"],
+            "generatedAt" => gmdate(DATE_ATOM),
+        ],
+    ]);
+} catch (Throwable $exception) {
+    $details = ["message" => $exception->getMessage()];
+    $previous = $exception->getPrevious();
+
+    if ($previous instanceof Throwable) {
+        $details["previous"] = $previous->getMessage();
+    }
+
+    respondWithError(502, "Unable to load election data.", $details);
 }
-
-$cookieHeader = sprintf('ASP.NET_SessionId=%s; CsrfToken=%s', $sessionId, $csrfToken);
-
-$dataRequest = createCurlHandle($dataUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
-curl_setopt_array($dataRequest, [
-    CURLOPT_HTTPHEADER => [
-        "Accept: application/json, text/javascript, */*; q=0.01",
-        "Accept-Language: en-US,en;q=0.6",
-        "Cache-Control: no-cache",
-        "Pragma: no-cache",
-        "Cookie: {$cookieHeader}",
-        "Referer: https://result.election.gov.np/PRVoteChartResult2082.aspx",
-        "X-CSRF-Token: {$csrfToken}",
-        "X-Requested-With: XMLHttpRequest",
-    ],
-]);
-
-$response = curl_exec($dataRequest);
-$responseStatus = (int) curl_getinfo($dataRequest, CURLINFO_RESPONSE_CODE);
-
-if ($response === false) {
-    $error = curl_error($dataRequest);
-    curl_close($dataRequest);
-    @unlink($cookieFile);
-    respondWithError(502, "Unable to fetch the upstream results.", ["curl" => $error]);
-    exit;
-}
-
-curl_close($dataRequest);
-@unlink($cookieFile);
-
-if ($responseStatus < 200 || $responseStatus >= 300) {
-    respondWithError(502, "The upstream results endpoint rejected the request.", ["status" => $responseStatus, "body" => $response]);
-    exit;
-}
-
-$decoded = json_decode($response, true);
-
-if (!is_array($decoded)) {
-    respondWithError(502, "The upstream service returned a non-JSON response.", ["body" => $response]);
-    exit;
-}
-
-echo json_encode($decoded);
