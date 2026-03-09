@@ -4,225 +4,189 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Nepal Federal Parliament Dashboard</title>
-    <style>
-      :root {
-        --bg: #f6f1e8;
-        --panel: rgba(255, 252, 247, 0.9);
-        --panel-strong: #fffdf8;
-        --ink: #1f1a16;
-        --muted: #61564c;
-        --line: rgba(48, 34, 21, 0.12);
-        --accent: #bc4f2f;
-        --accent-strong: #8d341b;
-        --accent-soft: #f4c8ae;
-        --olive: #28594d;
-        --olive-soft: #b8d6cb;
-        --gold: #e2b458;
-        --shadow: 0 18px 45px rgba(69, 44, 24, 0.11);
-        --radius-lg: 28px;
-        --radius-md: 18px;
-        --radius-sm: 12px;
-      }
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="hero-band" aria-labelledby="page-title">
+        <div class="hero-copy panel panel-hero">
+          <div class="eyebrow">Election Commission Feed</div>
+          <h1 id="page-title">
+            Nepal federal parliament,<br />
+            seen through the lens of a
+            <span class="hero-spotlight">two-thirds test</span>
+          </h1>
+          <p class="hero-text">
+            The dashboard combines proportional representation vote share with
+            first-past-the-post seat results to estimate who is merely leading,
+            who is nearing ordinary control, and who is within striking distance
+            of the constitutional-amendment threshold.
+          </p>
+          <div class="hero-meta" id="heroMeta"></div>
+        </div>
 
-      * {
-        box-sizing: border-box;
-      }
+        <aside class="hero-summary panel" aria-labelledby="summary-title">
+          <div class="panel-heading">
+            <h2 id="summary-title">Threshold watch</h2>
+            <p>Immediate signals from the combined federal projection.</p>
+          </div>
+          <div class="summary-grid" id="summaryGrid"></div>
+        </aside>
+      </section>
 
-      html {
-        scroll-behavior: smooth;
-      }
+      <section class="visual-stage" aria-label="Visual election views">
+        <article class="panel visual-card" aria-labelledby="seat-map-title">
+          <div class="panel-heading">
+            <div>
+              <h2 id="seat-map-title">Projected chamber seat map</h2>
+              <p>
+                Every dot represents one House seat allocated from the combined
+                PR estimate and FPTP won-plus-leading tally.
+              </p>
+            </div>
+          </div>
+          <div class="visual-frame visual-frame-seat">
+            <div id="seatMap" class="status-card">Loading seat map.</div>
+          </div>
+          <div class="legend-list" id="seatLegend"></div>
+        </article>
 
-      body {
-        margin: 0;
-        color: var(--ink);
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background:
-          radial-gradient(
-            circle at top left,
-            rgba(226, 180, 88, 0.28),
-            transparent 28%
-          ),
-          radial-gradient(
-            circle at right 20%,
-            rgba(40, 89, 77, 0.18),
-            transparent 22%
-          ),
-          linear-gradient(180deg, #f8f3ea 0%, #efe7da 100%);
-      }
+        <article class="panel visual-card" aria-labelledby="heat-map-title">
+          <div class="panel-heading">
+            <div>
+              <h2 id="heat-map-title">Official constituency heat map</h2>
+              <p>
+                The official Election Commission map remains embedded here so you
+                can cross-check this dashboard against the live upstream
+                constituency view.
+              </p>
+            </div>
+          </div>
+          <div class="visual-frame visual-frame-map">
+            <div id="heatMap" class="status-card">Loading constituency map.</div>
+          </div>
+          <div class="legend-list" id="mapLegend"></div>
+        </article>
+      </section>
 
-      a {
-        color: inherit;
-      }
+      <section class="dashboard-grid">
+        <aside class="sidebar-stack">
+          <section class="panel control-card" aria-labelledby="control-title">
+            <div class="panel-heading">
+              <h2 id="control-title">Filters and ranking</h2>
+              <p>Trim the table to the chamber, party group, or ranking logic you need.</p>
+            </div>
 
-      .page {
-        width: min(1280px, calc(100% - 32px));
-        margin: 0 auto;
-        padding: 28px 0 48px;
-      }
+            <div class="control-grid">
+              <div class="field-group">
+                <label for="searchInput">Search party</label>
+                <input
+                  id="searchInput"
+                  type="search"
+                  placeholder="Search by party name"
+                  autocomplete="off"
+                />
+              </div>
 
-      .hero {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
-        gap: 24px;
-        align-items: stretch;
-      }
+              <div class="field-group">
+                <label for="chamberFilter">View</label>
+                <select id="chamberFilter">
+                  <option value="all">Combined federal view</option>
+                  <option value="pr">PR performance</option>
+                  <option value="fptp">FPTP performance</option>
+                </select>
+              </div>
 
-      .hero-panel,
-      .summary-panel,
-      .control-panel,
-      .table-panel,
-      .conclusion-panel {
-        background: var(--panel);
-        backdrop-filter: blur(12px);
-        border: 1px solid var(--line);
-        border-radius: var(--radius-lg);
-        box-shadow: var(--shadow);
-      }
+              <div class="field-group field-row">
+                <div>
+                  <label for="sortBy">Sort by</label>
+                  <select id="sortBy">
+                    <option value="projectedFederalSeats">Projected federal seats</option>
+                    <option value="prEstimatedSeats">Estimated PR seats</option>
+                    <option value="fptpWon">FPTP won seats</option>
+                    <option value="fptpLeading">FPTP leading seats</option>
+                    <option value="prVotes">PR votes</option>
+                    <option value="partyName">Party name</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="sortDirection">Order</label>
+                  <select id="sortDirection">
+                    <option value="desc">Highest first</option>
+                    <option value="asc">Lowest first</option>
+                  </select>
+                </div>
+              </div>
 
-      .hero-panel {
-        padding: 32px;
-        position: relative;
-        overflow: hidden;
-      }
+              <label class="toggle-row" for="onlyProjected">
+                <input id="onlyProjected" type="checkbox" />
+                <span>Show only parties with at least one projected seat</span>
+              </label>
 
-      .hero-panel::after {
-        content: "";
-        position: absolute;
-        inset: auto -36px -48px auto;
-        width: 180px;
-        height: 180px;
-        border-radius: 50%;
-        background: radial-gradient(
-          circle,
-          rgba(188, 79, 47, 0.22),
-          transparent 70%
-        );
-      }
+              <p class="helper-copy" id="filterSummary">Loading combined results.</p>
 
-      .eyebrow {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 8px 14px;
-        border-radius: 999px;
-        background: rgba(40, 89, 77, 0.08);
-        color: var(--olive);
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-      }
+              <div class="button-row">
+                <button class="button-primary" id="refreshButton" type="button">Refresh data</button>
+                <button class="button-secondary" id="resetButton" type="button">Reset filters</button>
+              </div>
+            </div>
+          </section>
 
-      h1 {
-        margin: 18px 0 14px;
-        font-size: clamp(2.6rem, 6vw, 5rem);
-        line-height: 0.95;
-        letter-spacing: -0.05em;
-      }
+          <section class="panel conclusion-card" aria-labelledby="conclusion-title">
+            <div class="panel-heading">
+              <h2 id="conclusion-title">Cumulative conclusion</h2>
+              <p>The leading party interpreted against ordinary and constitutional power thresholds.</p>
+            </div>
+            <div class="conclusion-body" id="conclusionBody"></div>
+          </section>
+        </aside>
 
-      .hero-accent {
-        color: var(--accent-strong);
-      }
+        <section class="panel table-card" aria-labelledby="table-title">
+          <div class="panel-heading panel-heading-spread">
+            <div>
+              <h2 id="table-title">Party comparison table</h2>
+              <p>Compare PR vote share, direct-seat strength, and total projected federal position.</p>
+            </div>
+            <p class="table-meta" id="tableMeta">Waiting for election data.</p>
+          </div>
 
-      .subtitle {
-        max-width: 62ch;
-        margin: 0;
-        color: var(--muted);
-        font-size: 1rem;
-        line-height: 1.65;
-      }
+          <div class="table-shell">
+            <table>
+              <caption class="sr-only">
+                Combined party-level comparison of PR and FPTP election performance.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Party</th>
+                  <th scope="col">PR votes</th>
+                  <th scope="col">PR seat estimate</th>
+                  <th scope="col">FPTP won</th>
+                  <th scope="col">FPTP leading</th>
+                  <th scope="col">Projected federal seats</th>
+                </tr>
+              </thead>
+              <tbody id="resultsBody">
+                <tr>
+                  <td colspan="6">
+                    <div class="status-card">Loading live results.</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
 
-      .hero-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        margin-top: 20px;
-      }
-
-      .hero-chip {
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 8px 12px;
-        background: rgba(255, 255, 255, 0.66);
-        color: var(--muted);
-        font-size: 0.92rem;
-      }
-
-      .summary-panel {
-        padding: 24px;
-        display: grid;
-        gap: 16px;
-      }
-
-      .summary-panel h2,
-      .control-panel h2,
-      .table-panel h2,
-      .conclusion-panel h2 {
-        margin: 0;
-        font-size: 1.2rem;
-      }
-
-      .summary-grid {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .summary-card {
-        padding: 16px;
-        border-radius: var(--radius-md);
-        background: var(--panel-strong);
-        border: 1px solid var(--line);
-      }
-
-      .summary-label {
-        color: var(--muted);
-        font-size: 0.88rem;
-      }
-
-      .summary-value {
-        margin-top: 8px;
-        font-size: clamp(1.6rem, 3vw, 2.2rem);
-        font-weight: 800;
-        letter-spacing: -0.04em;
-      }
-
-      .summary-note {
-        margin-top: 6px;
-        color: var(--muted);
-        font-size: 0.92rem;
-        line-height: 1.45;
-      }
-
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
-        gap: 24px;
-        margin-top: 24px;
-      }
-
-      .stack {
-        display: grid;
-        gap: 24px;
-        align-content: start;
-      }
-
-      .control-panel,
-      .conclusion-panel,
-      .table-panel {
-        padding: 24px;
-      }
-
-      .control-grid {
-        display: grid;
-        gap: 16px;
-        margin-top: 18px;
-      }
-
-      .field {
-        display: grid;
-        gap: 8px;
-      }
+    <script src="assets/js/app.js" defer></script>
+  </body>
+</html>
 
       .field label,
       .checkbox-row label {
