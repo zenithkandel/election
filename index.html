@@ -37,8 +37,16 @@
         color: var(--ink);
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         background:
-          radial-gradient(circle at top left, rgba(226, 180, 88, 0.28), transparent 28%),
-          radial-gradient(circle at right 20%, rgba(40, 89, 77, 0.18), transparent 22%),
+          radial-gradient(
+            circle at top left,
+            rgba(226, 180, 88, 0.28),
+            transparent 28%
+          ),
+          radial-gradient(
+            circle at right 20%,
+            rgba(40, 89, 77, 0.18),
+            transparent 22%
+          ),
           linear-gradient(180deg, #f8f3ea 0%, #efe7da 100%);
       }
 
@@ -84,7 +92,11 @@
         width: 180px;
         height: 180px;
         border-radius: 50%;
-        background: radial-gradient(circle, rgba(188, 79, 47, 0.22), transparent 70%);
+        background: radial-gradient(
+          circle,
+          rgba(188, 79, 47, 0.22),
+          transparent 70%
+        );
       }
 
       .eyebrow {
@@ -292,7 +304,11 @@
       .conclusion-lead {
         padding: 18px;
         border-radius: var(--radius-md);
-        background: linear-gradient(135deg, rgba(188, 79, 47, 0.13), rgba(226, 180, 88, 0.18));
+        background: linear-gradient(
+          135deg,
+          rgba(188, 79, 47, 0.13),
+          rgba(226, 180, 88, 0.18)
+        );
         border: 1px solid rgba(188, 79, 47, 0.18);
       }
 
@@ -504,7 +520,11 @@
             live projection desk
           </h1>
           <p class="subtitle">
-            This dashboard combines proportional representation vote share with first-past-the-post seat results to show a practical federal parliament projection. PR seats are estimated from current vote share. FPTP totals use won and leading seats reported by the upstream election feed.
+            This dashboard combines proportional representation vote share with
+            first-past-the-post seat results to show a practical federal
+            parliament projection. PR seats are estimated from current vote
+            share. FPTP totals use won and leading seats reported by the
+            upstream election feed.
           </p>
           <div class="hero-meta" id="heroMeta"></div>
         </div>
@@ -522,7 +542,12 @@
             <div class="control-grid">
               <div class="field">
                 <label for="searchInput">Search party</label>
-                <input id="searchInput" type="search" placeholder="Type a party name" autocomplete="off" />
+                <input
+                  id="searchInput"
+                  type="search"
+                  placeholder="Type a party name"
+                  autocomplete="off"
+                />
               </div>
 
               <div class="field">
@@ -537,7 +562,9 @@
               <div class="field">
                 <label for="sortBy">Sort by</label>
                 <select id="sortBy">
-                  <option value="projectedFederalSeats">Projected federal seats</option>
+                  <option value="projectedFederalSeats">
+                    Projected federal seats
+                  </option>
                   <option value="prEstimatedSeats">Estimated PR seats</option>
                   <option value="fptpWon">FPTP won seats</option>
                   <option value="fptpLeading">FPTP leading seats</option>
@@ -556,7 +583,9 @@
 
               <div class="checkbox-row">
                 <input id="onlyProjected" type="checkbox" />
-                <label for="onlyProjected">Show only parties with at least one projected seat</label>
+                <label for="onlyProjected"
+                  >Show only parties with at least one projected seat</label
+                >
               </div>
 
               <p class="helper-text" id="filterSummary">
@@ -564,8 +593,12 @@
               </p>
 
               <div class="button-row">
-                <button class="primary-btn" id="refreshButton" type="button">Refresh data</button>
-                <button class="secondary-btn" id="resetButton" type="button">Reset filters</button>
+                <button class="primary-btn" id="refreshButton" type="button">
+                  Refresh data
+                </button>
+                <button class="secondary-btn" id="resetButton" type="button">
+                  Reset filters
+                </button>
               </div>
             </div>
           </section>
@@ -580,14 +613,17 @@
           <header>
             <div>
               <h2 id="table-title">Party comparison</h2>
-              <p class="table-meta" id="tableMeta">Waiting for election data.</p>
+              <p class="table-meta" id="tableMeta">
+                Waiting for election data.
+              </p>
             </div>
           </header>
 
           <div class="table-wrap">
             <table>
               <caption class="sr-only">
-                Combined party-level comparison of PR and FPTP election performance.
+                Combined party-level comparison of PR and FPTP election
+                performance.
               </caption>
               <thead>
                 <tr>
@@ -703,7 +739,8 @@
         return Array.from(byParty.values()).map((party) => ({
           ...party,
           securedFederalSeats: party.prEstimatedSeats + party.fptpWon,
-          projectedFederalSeats: party.prEstimatedSeats + party.fptpProjectedSeats,
+          projectedFederalSeats:
+            party.prEstimatedSeats + party.fptpProjectedSeats,
         }));
       }
 
@@ -747,7 +784,11 @@
             }
 
             if (selectedView === "fptp") {
-              return party.fptpWon > 0 || party.fptpLeading > 0 || party.candidateCount > 0;
+              return (
+                party.fptpWon > 0 ||
+                party.fptpLeading > 0 ||
+                party.candidateCount > 0
+              );
             }
 
             return true;
@@ -777,13 +818,17 @@
         }
 
         const leader = filteredData[0] || state.data[0];
-        const withProjection = state.data.filter((party) => party.projectedFederalSeats > 0).length;
+        const withProjection = state.data.filter(
+          (party) => party.projectedFederalSeats > 0,
+        ).length;
 
         const cards = [
           {
             label: "Projected front-runner",
             value: leader ? formatNumber(leader.projectedFederalSeats) : "0",
-            note: leader ? `${leader.partyName} projected federal seats` : "No data available",
+            note: leader
+              ? `${leader.partyName} projected federal seats`
+              : "No data available",
           },
           {
             label: "Majority threshold",
@@ -819,12 +864,18 @@
         const leader = filteredData[0] || null;
 
         if (!leader) {
-          conclusionBody.innerHTML = '<div class="status">No party matches the current filters.</div>';
+          conclusionBody.innerHTML =
+            '<div class="status">No party matches the current filters.</div>';
           return;
         }
 
-        const seatsToMajority = Math.max(MAJORITY_MARK - leader.projectedFederalSeats, 0);
-        const federalShare = state.meta ? leader.projectedFederalSeats / state.meta.totalSeats : 0;
+        const seatsToMajority = Math.max(
+          MAJORITY_MARK - leader.projectedFederalSeats,
+          0,
+        );
+        const federalShare = state.meta
+          ? leader.projectedFederalSeats / state.meta.totalSeats
+          : 0;
 
         conclusionBody.innerHTML = `
           <article class="conclusion-lead">
@@ -857,7 +908,10 @@
         const rows = filteredData
           .map((party) => {
             const projectedWidth = state.meta
-              ? Math.max((party.projectedFederalSeats / state.meta.totalSeats) * 100, 2)
+              ? Math.max(
+                  (party.projectedFederalSeats / state.meta.totalSeats) * 100,
+                  2,
+                )
               : 0;
             const symbolUrl = getSymbolUrl(party.symbolId);
 
@@ -903,7 +957,7 @@
         renderConclusion(filteredData);
         renderTable(filteredData);
 
-        tableMeta.textContent = `Showing ${formatNumber(filteredData.length)} parties sorted by ${sortBy.options[sortBy.selectedIndex].text.toLowerCase()}.`; 
+        tableMeta.textContent = `Showing ${formatNumber(filteredData.length)} parties sorted by ${sortBy.options[sortBy.selectedIndex].text.toLowerCase()}.`;
         filterSummary.textContent = `${formatNumber(filteredData.length)} parties match the current search and filters.`;
       }
 
@@ -917,14 +971,19 @@
         `;
 
         try {
-          const response = await fetch("api/results.php", { cache: "no-store" });
+          const response = await fetch("api/results.php", {
+            cache: "no-store",
+          });
           const payload = await response.json();
 
           if (!response.ok || payload.error) {
             throw new Error(payload.error || "Unable to load election data.");
           }
 
-          state.data = mergeDatasets(payload).sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats);
+          state.data = mergeDatasets(payload).sort(
+            (left, right) =>
+              right.projectedFederalSeats - left.projectedFederalSeats,
+          );
           state.meta = payload.meta;
           state.lastUpdated = payload.meta.generatedAt;
 
@@ -940,12 +999,19 @@
           `;
           conclusionBody.innerHTML = `<div class="status error">${error.message}</div>`;
           summaryGrid.innerHTML = `<div class="status error">${error.message}</div>`;
-          tableMeta.textContent = "The dashboard could not load upstream election data.";
+          tableMeta.textContent =
+            "The dashboard could not load upstream election data.";
           filterSummary.textContent = "Refresh to try again.";
         }
       }
 
-      [searchInput, chamberFilter, sortBy, sortDirection, onlyProjected].forEach((element) => {
+      [
+        searchInput,
+        chamberFilter,
+        sortBy,
+        sortDirection,
+        onlyProjected,
+      ].forEach((element) => {
         element.addEventListener("input", render);
         element.addEventListener("change", render);
       });
