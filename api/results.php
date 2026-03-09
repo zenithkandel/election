@@ -7,6 +7,8 @@ $sourcePageUrl = "https://result.election.gov.np/PRVoteChartResult2082.aspx";
 $dataUrl = "https://result.election.gov.np/Handlers/SecureJson.ashx?file=JSONFiles/Election2082/Common/PRHoRPartyTop5.txt";
 $userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36";
 $cookieFile = tempnam(sys_get_temp_dir(), "election_cookie_");
+$caBundle = ini_get("curl.cainfo") ?: ini_get("openssl.cafile");
+$shouldVerifyTls = $caBundle !== false && $caBundle !== "";
 
 if ($cookieFile === false) {
     http_response_code(500);
@@ -27,7 +29,7 @@ function respondWithError(int $statusCode, string $message, ?array $details = nu
     echo json_encode($payload);
 }
 
-function createCurlHandle(string $url, string $cookieFile, string $userAgent)
+function createCurlHandle(string $url, string $cookieFile, string $userAgent, bool $shouldVerifyTls, string $caBundle = "")
 {
     $ch = curl_init();
 
@@ -35,15 +37,20 @@ function createCurlHandle(string $url, string $cookieFile, string $userAgent)
         CURLOPT_URL => $url,
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_FOLLOWLOCATION => true,
-        CURLOPT_TIMEOUT => 30,
-        CURLOPT_CONNECTTIMEOUT => 10,
+        CURLOPT_TIMEOUT => 60,
+        CURLOPT_CONNECTTIMEOUT => 20,
         CURLOPT_COOKIEJAR => $cookieFile,
         CURLOPT_COOKIEFILE => $cookieFile,
         CURLOPT_ENCODING => "",
         CURLOPT_USERAGENT => $userAgent,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_IPRESOLVE => CURL_IPRESOLVE_V4,
+        CURLOPT_SSL_VERIFYPEER => $shouldVerifyTls,
+        CURLOPT_SSL_VERIFYHOST => $shouldVerifyTls ? 2 : 0,
     ]);
+
+    if ($shouldVerifyTls && $caBundle !== "") {
+        curl_setopt($ch, CURLOPT_CAINFO, $caBundle);
+    }
 
     return $ch;
 }
@@ -76,7 +83,7 @@ function parseCookiesFromJar(string $cookieFile): array
     return $cookies;
 }
 
-$bootstrapRequest = createCurlHandle($sourcePageUrl, $cookieFile, $userAgent);
+$bootstrapRequest = createCurlHandle($sourcePageUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
 curl_setopt_array($bootstrapRequest, [
     CURLOPT_HTTPHEADER => [
         "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -114,7 +121,7 @@ if ($csrfToken === null || $csrfToken === "") {
     exit;
 }
 
-$dataRequest = createCurlHandle($dataUrl, $cookieFile, $userAgent);
+$dataRequest = createCurlHandle($dataUrl, $cookieFile, $userAgent, $shouldVerifyTls, (string) $caBundle);
 curl_setopt_array($dataRequest, [
     CURLOPT_HTTPHEADER => [
         "Accept: application/json, text/javascript, */*; q=0.01",
