@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Nepal Election PR Results</title>
+
+    <style>
+      body {
+        font-family: Georgia, serif;
+        background: #f3f1ec;
+        margin: 0;
+        color: #111;
+      }
+
+      .container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        height: 100vh;
+      }
+
+      .left {
+        padding: 80px;
+      }
+
+      .right {
+        border-left: 1px solid #cfcfcf;
+        padding: 80px;
+        overflow-y: auto;
+      }
+
+      h1 {
+        font-size: 70px;
+        line-height: 1.1;
+      }
+
+      .highlight {
+        color: #b45a3c;
+        font-style: italic;
+      }
+
+      .subtitle {
+        color: #555;
+        margin-top: 20px;
+        font-size: 18px;
+        max-width: 450px;
+      }
+
+      .party {
+        border: 1px solid #111;
+        padding: 16px;
+        margin-bottom: 16px;
+        background: white;
+      }
+
+      .party h3 {
+        margin: 0;
+        font-size: 18px;
+      }
+
+      .meta {
+        font-size: 14px;
+        color: #555;
+        margin-top: 4px;
+      }
+
+      .bar {
+        height: 6px;
+        background: #ddd;
+        margin-top: 10px;
+      }
+
+      .fill {
+        height: 6px;
+        background: #b45a3c;
+      }
+
+      .seat {
+        font-weight: bold;
+        margin-top: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="left">
+        <h1>
+          Nepal Election<br />
+          <span class="highlight">PR Results</span><br />
+          Dashboard
+        </h1>
+
+        <p class="subtitle">
+          Live proportional representation vote results from the Election
+          Commission. Seats are estimated from vote share.
+        </p>
+      </div>
+
+      <div class="right" id="results"></div>
+    </div>
+
+    <script>
+      const TOTAL_SEATS = 110;
+
+      fetch("api/results.php")
+        .then((res) => res.json())
+        .then((data) => {
+          data.sort((a, b) => b.TotalVoteReceived - a.TotalVoteReceived);
+
+          let totalVotes = data.reduce(
+            (sum, p) => sum + p.TotalVoteReceived,
+            0,
+          );
+
+          const container = document.getElementById("results");
+
+          data.forEach((party) => {
+            let share = party.TotalVoteReceived / totalVotes;
+
+            let seats = Math.round(share * TOTAL_SEATS);
+
+            let percent = (share * 100).toFixed(2);
+
+            let div = document.createElement("div");
+            div.className = "party";
+
+            div.innerHTML = `
+
+<h3>${party.PoliticalPartyName}</h3>
+
+<div class="meta">
+Votes: ${party.TotalVoteReceived.toLocaleString()} 
+(${percent}%)
+</div>
+
+<div class="bar">
+<div class="fill" style="width:${percent}%"></div>
+</div>
+
+<div class="seat">
+Estimated Seats: ${seats}
+</div>
+
+`;
+
+            container.appendChild(div);
+          });
+        });
+    </script>
+  </body>
+</html>
