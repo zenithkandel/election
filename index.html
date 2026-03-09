@@ -1,149 +1,967 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>Nepal Election PR Results</title>
-
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nepal Federal Parliament Dashboard</title>
     <style>
+      :root {
+        --bg: #f6f1e8;
+        --panel: rgba(255, 252, 247, 0.9);
+        --panel-strong: #fffdf8;
+        --ink: #1f1a16;
+        --muted: #61564c;
+        --line: rgba(48, 34, 21, 0.12);
+        --accent: #bc4f2f;
+        --accent-strong: #8d341b;
+        --accent-soft: #f4c8ae;
+        --olive: #28594d;
+        --olive-soft: #b8d6cb;
+        --gold: #e2b458;
+        --shadow: 0 18px 45px rgba(69, 44, 24, 0.11);
+        --radius-lg: 28px;
+        --radius-md: 18px;
+        --radius-sm: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
       body {
-        font-family: Georgia, serif;
-        background: #f3f1ec;
         margin: 0;
-        color: #111;
+        color: var(--ink);
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background:
+          radial-gradient(circle at top left, rgba(226, 180, 88, 0.28), transparent 28%),
+          radial-gradient(circle at right 20%, rgba(40, 89, 77, 0.18), transparent 22%),
+          linear-gradient(180deg, #f8f3ea 0%, #efe7da 100%);
       }
 
-      .container {
+      a {
+        color: inherit;
+      }
+
+      .page {
+        width: min(1280px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 48px;
+      }
+
+      .hero {
         display: grid;
-        grid-template-columns: 1fr 1fr;
-        height: 100vh;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+        gap: 24px;
+        align-items: stretch;
       }
 
-      .left {
-        padding: 80px;
+      .hero-panel,
+      .summary-panel,
+      .control-panel,
+      .table-panel,
+      .conclusion-panel {
+        background: var(--panel);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
       }
 
-      .right {
-        border-left: 1px solid #cfcfcf;
-        padding: 80px;
-        overflow-y: auto;
+      .hero-panel {
+        padding: 32px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-panel::after {
+        content: "";
+        position: absolute;
+        inset: auto -36px -48px auto;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(188, 79, 47, 0.22), transparent 70%);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 14px;
+        border-radius: 999px;
+        background: rgba(40, 89, 77, 0.08);
+        color: var(--olive);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
       }
 
       h1 {
-        font-size: 70px;
-        line-height: 1.1;
+        margin: 18px 0 14px;
+        font-size: clamp(2.6rem, 6vw, 5rem);
+        line-height: 0.95;
+        letter-spacing: -0.05em;
       }
 
-      .highlight {
-        color: #b45a3c;
-        font-style: italic;
+      .hero-accent {
+        color: var(--accent-strong);
       }
 
       .subtitle {
-        color: #555;
-        margin-top: 20px;
-        font-size: 18px;
-        max-width: 450px;
-      }
-
-      .party {
-        border: 1px solid #111;
-        padding: 16px;
-        margin-bottom: 16px;
-        background: white;
-      }
-
-      .party h3 {
+        max-width: 62ch;
         margin: 0;
-        font-size: 18px;
+        color: var(--muted);
+        font-size: 1rem;
+        line-height: 1.65;
       }
 
-      .meta {
-        font-size: 14px;
-        color: #555;
-        margin-top: 4px;
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 20px;
       }
 
-      .bar {
-        height: 6px;
-        background: #ddd;
-        margin-top: 10px;
+      .hero-chip {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 8px 12px;
+        background: rgba(255, 255, 255, 0.66);
+        color: var(--muted);
+        font-size: 0.92rem;
       }
 
-      .fill {
-        height: 6px;
-        background: #b45a3c;
+      .summary-panel {
+        padding: 24px;
+        display: grid;
+        gap: 16px;
       }
 
-      .seat {
-        font-weight: bold;
+      .summary-panel h2,
+      .control-panel h2,
+      .table-panel h2,
+      .conclusion-panel h2 {
+        margin: 0;
+        font-size: 1.2rem;
+      }
+
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .summary-card {
+        padding: 16px;
+        border-radius: var(--radius-md);
+        background: var(--panel-strong);
+        border: 1px solid var(--line);
+      }
+
+      .summary-label {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .summary-value {
+        margin-top: 8px;
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+        font-weight: 800;
+        letter-spacing: -0.04em;
+      }
+
+      .summary-note {
         margin-top: 6px;
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+        gap: 24px;
+        margin-top: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 24px;
+        align-content: start;
+      }
+
+      .control-panel,
+      .conclusion-panel,
+      .table-panel {
+        padding: 24px;
+      }
+
+      .control-grid {
+        display: grid;
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+      }
+
+      .field label,
+      .checkbox-row label {
+        font-weight: 700;
+        font-size: 0.94rem;
+      }
+
+      .field input,
+      .field select {
+        width: 100%;
+        padding: 12px 14px;
+        border-radius: var(--radius-sm);
+        border: 1px solid rgba(48, 34, 21, 0.16);
+        background: #fff;
+        color: var(--ink);
+        font: inherit;
+      }
+
+      .field input:focus,
+      .field select:focus,
+      button:focus-visible {
+        outline: 3px solid rgba(40, 89, 77, 0.22);
+        outline-offset: 2px;
+        border-color: var(--olive);
+      }
+
+      .checkbox-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px;
+        border-radius: var(--radius-sm);
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .checkbox-row input {
+        width: 18px;
+        height: 18px;
+        accent-color: var(--accent);
+      }
+
+      .helper-text {
+        color: var(--muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+      }
+
+      .button-row {
+        display: flex;
+        gap: 12px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 12px 16px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .primary-btn {
+        background: var(--accent);
+        color: #fff;
+      }
+
+      .secondary-btn {
+        background: rgba(40, 89, 77, 0.1);
+        color: var(--olive);
+      }
+
+      .conclusion-body {
+        margin-top: 16px;
+        display: grid;
+        gap: 14px;
+      }
+
+      .conclusion-lead {
+        padding: 18px;
+        border-radius: var(--radius-md);
+        background: linear-gradient(135deg, rgba(188, 79, 47, 0.13), rgba(226, 180, 88, 0.18));
+        border: 1px solid rgba(188, 79, 47, 0.18);
+      }
+
+      .conclusion-kicker {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.86rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+
+      .conclusion-title {
+        margin: 10px 0 4px;
+        font-size: 1.4rem;
+      }
+
+      .conclusion-text,
+      .conclusion-list {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.55;
+      }
+
+      .conclusion-list {
+        padding-left: 18px;
+      }
+
+      .table-panel header {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .table-meta {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .table-wrap {
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.82);
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        padding: 14px 16px;
+        text-align: left;
+        border-bottom: 1px solid var(--line);
+        vertical-align: middle;
+      }
+
+      thead th {
+        position: sticky;
+        top: 0;
+        z-index: 1;
+        background: #fcf8f1;
+        font-size: 0.86rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      tbody tr:hover {
+        background: rgba(226, 180, 88, 0.08);
+      }
+
+      tbody tr:last-child td {
+        border-bottom: 0;
+      }
+
+      .party-cell {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .symbol {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        border: 1px solid var(--line);
+        background: #fff;
+        object-fit: contain;
+        flex-shrink: 0;
+      }
+
+      .party-name {
+        font-weight: 700;
+      }
+
+      .party-subtle {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .metric-stack {
+        display: grid;
+        gap: 4px;
+      }
+
+      .metric-strong {
+        font-weight: 800;
+      }
+
+      .seat-bar {
+        width: min(180px, 100%);
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(40, 89, 77, 0.12);
+        overflow: hidden;
+      }
+
+      .seat-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--olive), var(--accent));
+      }
+
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+
+      .status {
+        padding: 24px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.86);
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+
+      .error {
+        color: #8a1f11;
+        background: rgba(199, 56, 27, 0.1);
+        border-color: rgba(199, 56, 27, 0.18);
+      }
+
+      @media (max-width: 1024px) {
+        .hero,
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .page {
+          width: min(100% - 20px, 1280px);
+        }
+
+        .table-panel header {
+          flex-direction: column;
+          align-items: start;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .hero-panel,
+        .summary-panel,
+        .control-panel,
+        .conclusion-panel,
+        .table-panel {
+          padding: 20px;
+          border-radius: 22px;
+        }
+
+        .summary-grid {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          line-height: 1.02;
+        }
+
+        th,
+        td {
+          padding: 12px;
+        }
+
+        .button-row {
+          flex-direction: column;
+        }
+
+        button {
+          width: 100%;
+        }
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <div class="left">
-        <h1>
-          Nepal Election<br />
-          <span class="highlight">PR Results</span><br />
-          Dashboard
-        </h1>
+    <main class="page">
+      <section class="hero" aria-labelledby="page-title">
+        <div class="hero-panel">
+          <div class="eyebrow">Election Commission Feed</div>
+          <h1 id="page-title">
+            Nepal <span class="hero-accent">Federal Parliament</span><br />
+            live projection desk
+          </h1>
+          <p class="subtitle">
+            This dashboard combines proportional representation vote share with first-past-the-post seat results to show a practical federal parliament projection. PR seats are estimated from current vote share. FPTP totals use won and leading seats reported by the upstream election feed.
+          </p>
+          <div class="hero-meta" id="heroMeta"></div>
+        </div>
 
-        <p class="subtitle">
-          Live proportional representation vote results from the Election
-          Commission. Seats are estimated from vote share.
-        </p>
-      </div>
+        <aside class="summary-panel" aria-labelledby="summary-title">
+          <h2 id="summary-title">At a glance</h2>
+          <div class="summary-grid" id="summaryGrid"></div>
+        </aside>
+      </section>
 
-      <div class="right" id="results"></div>
-    </div>
+      <section class="layout">
+        <div class="stack">
+          <section class="control-panel" aria-labelledby="control-title">
+            <h2 id="control-title">Filters and sorting</h2>
+            <div class="control-grid">
+              <div class="field">
+                <label for="searchInput">Search party</label>
+                <input id="searchInput" type="search" placeholder="Type a party name" autocomplete="off" />
+              </div>
+
+              <div class="field">
+                <label for="chamberFilter">View</label>
+                <select id="chamberFilter">
+                  <option value="all">Combined federal view</option>
+                  <option value="pr">PR performance</option>
+                  <option value="fptp">FPTP performance</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="sortBy">Sort by</label>
+                <select id="sortBy">
+                  <option value="projectedFederalSeats">Projected federal seats</option>
+                  <option value="prEstimatedSeats">Estimated PR seats</option>
+                  <option value="fptpWon">FPTP won seats</option>
+                  <option value="fptpLeading">FPTP leading seats</option>
+                  <option value="prVotes">PR votes</option>
+                  <option value="partyName">Party name</option>
+                </select>
+              </div>
+
+              <div class="field">
+                <label for="sortDirection">Order</label>
+                <select id="sortDirection">
+                  <option value="desc">Highest first</option>
+                  <option value="asc">Lowest first</option>
+                </select>
+              </div>
+
+              <div class="checkbox-row">
+                <input id="onlyProjected" type="checkbox" />
+                <label for="onlyProjected">Show only parties with at least one projected seat</label>
+              </div>
+
+              <p class="helper-text" id="filterSummary">
+                Loading combined results.
+              </p>
+
+              <div class="button-row">
+                <button class="primary-btn" id="refreshButton" type="button">Refresh data</button>
+                <button class="secondary-btn" id="resetButton" type="button">Reset filters</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="conclusion-panel" aria-labelledby="conclusion-title">
+            <h2 id="conclusion-title">Cumulative conclusion</h2>
+            <div class="conclusion-body" id="conclusionBody"></div>
+          </section>
+        </div>
+
+        <section class="table-panel" aria-labelledby="table-title">
+          <header>
+            <div>
+              <h2 id="table-title">Party comparison</h2>
+              <p class="table-meta" id="tableMeta">Waiting for election data.</p>
+            </div>
+          </header>
+
+          <div class="table-wrap">
+            <table>
+              <caption class="sr-only">
+                Combined party-level comparison of PR and FPTP election performance.
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Party</th>
+                  <th scope="col">PR votes</th>
+                  <th scope="col">PR seat estimate</th>
+                  <th scope="col">FPTP won</th>
+                  <th scope="col">FPTP leading</th>
+                  <th scope="col">Projected federal seats</th>
+                </tr>
+              </thead>
+              <tbody id="resultsBody">
+                <tr>
+                  <td colspan="6">
+                    <div class="status">Loading live results.</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
 
     <script>
-      const TOTAL_SEATS = 110;
+      const state = {
+        data: [],
+        meta: null,
+        lastUpdated: null,
+      };
 
-      fetch("api/results.php")
-        .then((res) => res.json())
-        .then((data) => {
-          data.sort((a, b) => b.TotalVoteReceived - a.TotalVoteReceived);
+      const MAJORITY_MARK = 138;
+      const resultsBody = document.getElementById("resultsBody");
+      const summaryGrid = document.getElementById("summaryGrid");
+      const conclusionBody = document.getElementById("conclusionBody");
+      const heroMeta = document.getElementById("heroMeta");
+      const tableMeta = document.getElementById("tableMeta");
+      const filterSummary = document.getElementById("filterSummary");
+      const searchInput = document.getElementById("searchInput");
+      const chamberFilter = document.getElementById("chamberFilter");
+      const sortBy = document.getElementById("sortBy");
+      const sortDirection = document.getElementById("sortDirection");
+      const onlyProjected = document.getElementById("onlyProjected");
+      const refreshButton = document.getElementById("refreshButton");
+      const resetButton = document.getElementById("resetButton");
 
-          let totalVotes = data.reduce(
-            (sum, p) => sum + p.TotalVoteReceived,
-            0,
-          );
+      function formatNumber(value) {
+        return new Intl.NumberFormat("en-US").format(value || 0);
+      }
 
-          const container = document.getElementById("results");
+      function formatPercent(value) {
+        return `${(value * 100).toFixed(2)}%`;
+      }
 
-          data.forEach((party) => {
-            let share = party.TotalVoteReceived / totalVotes;
+      function formatTime(timestamp) {
+        if (!timestamp) {
+          return "Not available";
+        }
 
-            let seats = Math.round(share * TOTAL_SEATS);
+        return new Intl.DateTimeFormat("en-US", {
+          dateStyle: "medium",
+          timeStyle: "short",
+        }).format(new Date(timestamp));
+      }
 
-            let percent = (share * 100).toFixed(2);
+      function getSymbolUrl(symbolId) {
+        if (!symbolId) {
+          return "";
+        }
 
-            let div = document.createElement("div");
-            div.className = "party";
+        return `https://result.election.gov.np/Images/symbol-hor-pa/${symbolId}.jpg?v=0.2`;
+      }
 
-            div.innerHTML = `
+      function mergeDatasets(payload) {
+        const byParty = new Map();
 
-<h3>${party.PoliticalPartyName}</h3>
-
-<div class="meta">
-Votes: ${party.TotalVoteReceived.toLocaleString()} 
-(${percent}%)
-</div>
-
-<div class="bar">
-<div class="fill" style="width:${percent}%"></div>
-</div>
-
-<div class="seat">
-Estimated Seats: ${seats}
-</div>
-
-`;
-
-            container.appendChild(div);
+        payload.pr.forEach((party) => {
+          byParty.set(party.partyName, {
+            partyName: party.partyName,
+            symbolId: party.symbolId,
+            prVotes: party.prVotes,
+            prVoteShare: party.prVoteShare,
+            prEstimatedSeats: party.prEstimatedSeats,
+            fptpWon: 0,
+            fptpLeading: 0,
+            fptpProjectedSeats: 0,
+            candidateCount: 0,
           });
         });
+
+        payload.fptp.forEach((party) => {
+          const existing = byParty.get(party.partyName) || {
+            partyName: party.partyName,
+            symbolId: party.symbolId,
+            prVotes: 0,
+            prVoteShare: 0,
+            prEstimatedSeats: 0,
+            fptpWon: 0,
+            fptpLeading: 0,
+            fptpProjectedSeats: 0,
+            candidateCount: 0,
+          };
+
+          existing.symbolId = existing.symbolId || party.symbolId;
+          existing.fptpWon = party.fptpWon;
+          existing.fptpLeading = party.fptpLeading;
+          existing.fptpProjectedSeats = party.fptpProjectedSeats;
+          existing.candidateCount = party.candidateCount;
+
+          byParty.set(party.partyName, existing);
+        });
+
+        return Array.from(byParty.values()).map((party) => ({
+          ...party,
+          securedFederalSeats: party.prEstimatedSeats + party.fptpWon,
+          projectedFederalSeats: party.prEstimatedSeats + party.fptpProjectedSeats,
+        }));
+      }
+
+      function getComparator(key, direction) {
+        const factor = direction === "asc" ? 1 : -1;
+
+        return (left, right) => {
+          const leftValue = left[key];
+          const rightValue = right[key];
+
+          if (key === "partyName") {
+            return leftValue.localeCompare(rightValue) * factor;
+          }
+
+          if (rightValue === leftValue) {
+            return left.partyName.localeCompare(right.partyName);
+          }
+
+          return (leftValue - rightValue) * factor;
+        };
+      }
+
+      function getFilteredData() {
+        const query = searchInput.value.trim().toLowerCase();
+        const selectedView = chamberFilter.value;
+        const selectedSort = sortBy.value;
+        const direction = sortDirection.value;
+
+        return state.data
+          .filter((party) => {
+            if (query && !party.partyName.toLowerCase().includes(query)) {
+              return false;
+            }
+
+            if (onlyProjected.checked && party.projectedFederalSeats < 1) {
+              return false;
+            }
+
+            if (selectedView === "pr") {
+              return party.prVotes > 0 || party.prEstimatedSeats > 0;
+            }
+
+            if (selectedView === "fptp") {
+              return party.fptpWon > 0 || party.fptpLeading > 0 || party.candidateCount > 0;
+            }
+
+            return true;
+          })
+          .sort(getComparator(selectedSort, direction));
+      }
+
+      function renderHeroMeta(meta) {
+        heroMeta.innerHTML = "";
+
+        [
+          `PR seats: ${formatNumber(meta.prSeats)}`,
+          `FPTP seats: ${formatNumber(meta.fptpSeats)}`,
+          `House total: ${formatNumber(meta.totalSeats)}`,
+          `Updated: ${formatTime(state.lastUpdated)}`,
+        ].forEach((text) => {
+          const chip = document.createElement("div");
+          chip.className = "hero-chip";
+          chip.textContent = text;
+          heroMeta.appendChild(chip);
+        });
+      }
+
+      function renderSummary(filteredData) {
+        if (!state.meta) {
+          return;
+        }
+
+        const leader = filteredData[0] || state.data[0];
+        const withProjection = state.data.filter((party) => party.projectedFederalSeats > 0).length;
+
+        const cards = [
+          {
+            label: "Projected front-runner",
+            value: leader ? formatNumber(leader.projectedFederalSeats) : "0",
+            note: leader ? `${leader.partyName} projected federal seats` : "No data available",
+          },
+          {
+            label: "Majority threshold",
+            value: formatNumber(MAJORITY_MARK),
+            note: `${formatNumber(state.meta.totalSeats)} total seats in the House of Representatives`,
+          },
+          {
+            label: "Parties in projection",
+            value: formatNumber(withProjection),
+            note: "Parties currently projected to hold at least one federal seat",
+          },
+          {
+            label: "Displayed rows",
+            value: formatNumber(filteredData.length),
+            note: `Filtered from ${formatNumber(state.data.length)} total parties in the combined feed`,
+          },
+        ];
+
+        summaryGrid.innerHTML = cards
+          .map(
+            (card) => `
+              <article class="summary-card">
+                <div class="summary-label">${card.label}</div>
+                <div class="summary-value">${card.value}</div>
+                <div class="summary-note">${card.note}</div>
+              </article>
+            `,
+          )
+          .join("");
+      }
+
+      function renderConclusion(filteredData) {
+        const leader = filteredData[0] || null;
+
+        if (!leader) {
+          conclusionBody.innerHTML = '<div class="status">No party matches the current filters.</div>';
+          return;
+        }
+
+        const seatsToMajority = Math.max(MAJORITY_MARK - leader.projectedFederalSeats, 0);
+        const federalShare = state.meta ? leader.projectedFederalSeats / state.meta.totalSeats : 0;
+
+        conclusionBody.innerHTML = `
+          <article class="conclusion-lead">
+            <p class="conclusion-kicker">Current projection leader</p>
+            <h3 class="conclusion-title">${leader.partyName}</h3>
+            <p class="conclusion-text">
+              ${leader.partyName} is currently projected to reach ${formatNumber(leader.projectedFederalSeats)} seats in the federal parliament, combining ${formatNumber(leader.prEstimatedSeats)} estimated PR seats with ${formatNumber(leader.fptpWon)} won and ${formatNumber(leader.fptpLeading)} leading FPTP seats.
+            </p>
+          </article>
+          <ul class="conclusion-list">
+            <li>Projected share of the House: ${formatPercent(federalShare)}</li>
+            <li>Seats still short of a standalone majority: ${formatNumber(seatsToMajority)}</li>
+            <li>Current secured floor using PR estimate plus FPTP wins: ${formatNumber(leader.securedFederalSeats)}</li>
+          </ul>
+        `;
+      }
+
+      function renderTable(filteredData) {
+        if (!filteredData.length) {
+          resultsBody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="status">No parties match the current filters.</div>
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        const rows = filteredData
+          .map((party) => {
+            const projectedWidth = state.meta
+              ? Math.max((party.projectedFederalSeats / state.meta.totalSeats) * 100, 2)
+              : 0;
+            const symbolUrl = getSymbolUrl(party.symbolId);
+
+            return `
+              <tr>
+                <td>
+                  <div class="party-cell">
+                    ${symbolUrl ? `<img class="symbol" src="${symbolUrl}" alt="${party.partyName} symbol" />` : ""}
+                    <div>
+                      <div class="party-name">${party.partyName}</div>
+                      <div class="party-subtle">Candidates: ${formatNumber(party.candidateCount)}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  <div class="metric-stack">
+                    <span class="metric-strong">${formatNumber(party.prVotes)}</span>
+                    <span class="party-subtle">${formatPercent(party.prVoteShare)}</span>
+                  </div>
+                </td>
+                <td>${formatNumber(party.prEstimatedSeats)}</td>
+                <td>${formatNumber(party.fptpWon)}</td>
+                <td>${formatNumber(party.fptpLeading)}</td>
+                <td>
+                  <div class="metric-stack">
+                    <span class="metric-strong">${formatNumber(party.projectedFederalSeats)}</span>
+                    <div class="seat-bar" aria-hidden="true">
+                      <div class="seat-fill" style="width: ${projectedWidth}%"></div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            `;
+          })
+          .join("");
+
+        resultsBody.innerHTML = rows;
+      }
+
+      function render() {
+        const filteredData = getFilteredData();
+        renderSummary(filteredData);
+        renderConclusion(filteredData);
+        renderTable(filteredData);
+
+        tableMeta.textContent = `Showing ${formatNumber(filteredData.length)} parties sorted by ${sortBy.options[sortBy.selectedIndex].text.toLowerCase()}.`; 
+        filterSummary.textContent = `${formatNumber(filteredData.length)} parties match the current search and filters.`;
+      }
+
+      async function loadData() {
+        resultsBody.innerHTML = `
+          <tr>
+            <td colspan="6">
+              <div class="status">Loading live results.</div>
+            </td>
+          </tr>
+        `;
+
+        try {
+          const response = await fetch("api/results.php", { cache: "no-store" });
+          const payload = await response.json();
+
+          if (!response.ok || payload.error) {
+            throw new Error(payload.error || "Unable to load election data.");
+          }
+
+          state.data = mergeDatasets(payload).sort((left, right) => right.projectedFederalSeats - left.projectedFederalSeats);
+          state.meta = payload.meta;
+          state.lastUpdated = payload.meta.generatedAt;
+
+          renderHeroMeta(payload.meta);
+          render();
+        } catch (error) {
+          resultsBody.innerHTML = `
+            <tr>
+              <td colspan="6">
+                <div class="status error">${error.message}</div>
+              </td>
+            </tr>
+          `;
+          conclusionBody.innerHTML = `<div class="status error">${error.message}</div>`;
+          summaryGrid.innerHTML = `<div class="status error">${error.message}</div>`;
+          tableMeta.textContent = "The dashboard could not load upstream election data.";
+          filterSummary.textContent = "Refresh to try again.";
+        }
+      }
+
+      [searchInput, chamberFilter, sortBy, sortDirection, onlyProjected].forEach((element) => {
+        element.addEventListener("input", render);
+        element.addEventListener("change", render);
+      });
+
+      refreshButton.addEventListener("click", loadData);
+
+      resetButton.addEventListener("click", () => {
+        searchInput.value = "";
+        chamberFilter.value = "all";
+        sortBy.value = "projectedFederalSeats";
+        sortDirection.value = "desc";
+        onlyProjected.checked = false;
+        render();
+      });
+
+      loadData();
     </script>
   </body>
 </html>
