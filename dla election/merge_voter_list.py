@@ -23,13 +23,40 @@ fm = npttf2utf.FontMapper(map_json_path)
 def clean_nepali_name(name):
     if not name:
         return ""
-    # Remove common middle names and titles that lead to matching discrepancies
-    stopwords = ["प्रसाद", "बहादुर", "कुमार", "शर्मा", "देवी", "कुमारी", "प्र", "डा", "एड", "सिनियर"]
-    name_clean = name.strip()
-    for w in stopwords:
-        name_clean = name_clean.replace(w, "")
-    # Remove spaces and punctuation
-    for char in [" ", ".", ",", "-", "“", "”", '"', "'", "(", ")", "/"]:
+    name = name.strip()
+    # Remove parenthetical text (e.g. "(सुवास)", "(खाती)", "(कपिल)")
+    name = re.sub(r'\(.*?\)', '', name)
+    
+    # Normalize spelling variations and prefixes globally
+    name = name.replace("बहादूर", "बहादुर").replace("वहादूर", "बहादुर").replace("वहादुर", "बहादुर")
+    name = name.replace("र्प्साद", "प्रसाद").replace("कमार", "कुमार")
+    name = name.replace("डा.", "").replace("डा ", "").replace("एड.", "").replace("एड ", "")
+    name = name.replace("ङ्ग", "ं") # normalize nasal conjunct to anusvara dot
+    
+    words = name.split()
+    if not words:
+        return ""
+        
+    stopwords = ["प्रसाद", "बहादुर", "कुमार", "कुमारी", "शर्मा", "दत्त", "राज", "लाल", "शरण", "नाथ", "प्र", "सिनियर", "कु"]
+    compound_stopwords = ["प्रसाद", "बहादुर", "कुमार", "कुमारी", "कु"]
+    
+    cleaned_words = []
+    for i, w in enumerate(words):
+        w_clean = w.replace(".", "").replace(",", "")
+        
+        # If it is a stopword and not the last word, skip it
+        if w_clean in stopwords and i < len(words) - 1:
+            continue
+            
+        # Clean compound middle names from non-last words (only using compound_stopwords)
+        if i < len(words) - 1:
+            for sw in compound_stopwords:
+                if sw in w:
+                    w = w.replace(sw, "")
+        cleaned_words.append(w)
+        
+    name_clean = "".join(cleaned_words)
+    for char in [" ", ".", ",", "-", "“", "”", '"', "'", "(", ")", "/", "÷"]:
         name_clean = name_clean.replace(char, "")
     return name_clean
 
@@ -163,7 +190,7 @@ def process_table(table, table_name, is_life_members=False):
                 best_json_ratio = ratio
                 best_json_match = cand
                 
-        if best_json_match and best_json_ratio >= 0.6:
+        if best_json_match and best_json_ratio >= 0.85:
             matched_name = best_json_match[1] # official name from registry
             matched_address = best_json_match[2]
             address_match_type = "License"
@@ -215,7 +242,7 @@ def process_table(table, table_name, is_life_members=False):
                 best_xlsx_ratio = ratio
                 best_xlsx_match = cand
                 
-        if best_xlsx_match and best_xlsx_ratio >= 0.6:
+        if best_xlsx_match and best_xlsx_ratio >= 0.85:
             # If the best match row has a phone number, use it
             if best_xlsx_match['phone_clean']:
                 phone_number = best_xlsx_match['phone_clean']
@@ -224,7 +251,7 @@ def process_table(table, table_name, is_life_members=False):
                 for cand in xlsx_candidates:
                     cand_name = cand['name_unicode']
                     cand_ratio = difflib.SequenceMatcher(None, clean_nepali_name(cand_name), clean_nepali_name(name_unicode)).ratio()
-                    if cand['phone_clean'] and cand_ratio >= 0.6:
+                    if cand['phone_clean'] and cand_ratio >= 0.85:
                         phone_number = cand['phone_clean']
                         break
             phone_match_type = "License"
